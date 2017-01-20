@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>mainWindow</class>
+ <widget class="QDialog" name="mainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>784</width>
+    <height>505</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>clusterArchitecture Finder</string>
+  </property>
+  <widget class="QLineEdit" name="GeneFilePath">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>10</y>
+     <width>281</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="readOnly">
+    <bool>true</bool>
+   </property>
+  </widget>
+  <widget class="QListWidget" name="geneList">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>61</y>
+     <width>281</width>
+     <height>171</height>
+    </rect>
+   </property>
+   <property name="selectionMode">
+    <enum>QAbstractItemView::MultiSelection</enum>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="clearGeneBtn">
+   <property name="geometry">
+    <rect>
+     <x>190</x>
+     <y>230</y>
+     <width>101</width>
+     <height>23</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>clear</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="addDNAfilePathBtn">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>30</y>
+     <width>111</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Gene File Path</string>
+   </property>
+  </widget>
+  <widget class="QListWidget" name="listWidget_2">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>311</y>
+     <width>281</width>
+     <height>171</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QLineEdit" name="hmmFilePath">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>260</y>
+     <width>281</width>
+     <height>21</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="addHMMbtn">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>480</y>
+     <width>101</width>
+     <height>23</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>add</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="clearHMMbtn">
+   <property name="geometry">
+    <rect>
+     <x>190</x>
+     <y>480</y>
+     <width>101</width>
+     <height>23</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>clear</string>
+   </property>
+  </widget>
+  <widget class="QTableWidget" name="tableWidget">
+   <property name="geometry">
+    <rect>
+     <x>390</x>
+     <y>50</y>
+     <width>371</width>
+     <height>401</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="addGeneBtn">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>230</y>
+     <width>101</width>
+     <height>23</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>add</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="addHMMfileBtn">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>280</y>
+     <width>111</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>HMM File Path</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="addDNAfileBtn">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>180</x>
+     <y>30</y>
+     <width>111</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Parse Gene File</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="addHMMfileBtn_2">
+   <property name="geometry">
+    <rect>
+     <x>180</x>
+     <y>280</y>
+     <width>111</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Parse HMM FIle</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="closeBtn">
+   <property name="geometry">
+    <rect>
+     <x>670</x>
+     <y>470</y>
+     <width>101</width>
+     <height>23</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>close</string>
+   </property>
+  </widget>
+ </widget>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>clearGeneBtn</sender>
+   <signal>clicked()</signal>
+   <receiver>geneList</receiver>
+   <slot>clear()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>177</x>
+     <y>253</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>177</x>
+     <y>174</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+</ui>

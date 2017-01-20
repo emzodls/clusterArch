@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>800</width>
+    <height>600</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>MainWindow</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <widget class="QLineEdit" name="GeneFilePath">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>20</y>
+      <width>281</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="readOnly">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="addDNAfilePathBtn">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>50</y>
+      <width>111</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Gene File Path</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="addDNAfileBtn">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>180</x>
+      <y>50</y>
+      <width>111</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Parse Gene File</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="clearGeneBtn">
+    <property name="geometry">
+     <rect>
+      <x>190</x>
+      <y>250</y>
+      <width>101</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>clear</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="hmmFilePath">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>280</y>
+      <width>281</width>
+      <height>21</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="addGeneBtn">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>250</y>
+      <width>101</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>add</string>
+    </property>
+   </widget>
+   <widget class="QListWidget" name="geneList">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>81</y>
+      <width>281</width>
+      <height>171</height>
+     </rect>
+    </property>
+    <property name="selectionMode">
+     <enum>QAbstractItemView::MultiSelection</enum>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="addHMMbtn">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>500</y>
+      <width>101</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>add</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="closeBtn">
+    <property name="geometry">
+     <rect>
+      <x>690</x>
+      <y>520</y>
+      <width>101</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>close</string>
+    </property>
+   </widget>
+   <widget class="QTableWidget" name="tableWidget">
+    <property name="geometry">
+     <rect>
+      <x>410</x>
+      <y>120</y>
+      <width>371</width>
+      <height>401</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QListWidget" name="listWidget_2">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>331</y>
+      <width>281</width>
+      <height>171</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="clearHMMbtn">
+    <property name="geometry">
+     <rect>
+      <x>190</x>
+      <y>500</y>
+      <width>101</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>clear</string>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>800</width>
+     <height>22</height>
+    </rect>
+   </property>
+   <widget class="QMenu" name="menuFile">
+    <property name="title">
+     <string>File</string>
+    </property>
+    <addaction name="actionSet_Database"/>
+    <addaction name="actionOpen_Gene_File"/>
+    <addaction name="actionOpen_HMM_File"/>
+   </widget>
+   <widget class="QMenu" name="menuClose">
+    <property name="title">
+     <string>Close</string>
+    </property>
+   </widget>
+   <addaction name="menuFile"/>
+   <addaction name="menuClose"/>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+  <action name="actionSet_Database">
+   <property name="text">
+    <string>Set Database</string>
+   </property>
+  </action>
+  <action name="actionOpen_Gene_File">
+   <property name="text">
+    <string>Open Gene File</string>
+   </property>
+  </action>
+  <action name="actionOpen_HMM_File">
+   <property name="text">
+    <string>Open HMM File</string>
+   </property>
+  </action>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
