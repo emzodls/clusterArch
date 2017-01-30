@@ -1,9 +1,11 @@
+import os
 from PyQt5.QtCore import (QFile, QFileInfo, QPoint, QRect, QSettings, QSize,
         Qt, QTextStream,QCoreApplication)
 from PyQt5 import QtGui
 from PyQt5.QtWidgets import (QAction, QApplication, QFileDialog, QMainWindow,
         QMessageBox, QTextEdit,QTableWidgetItem)
 from utils import parseSeqFile,parseHMMfile
+from collections import Counter
 
 # Handle back to sequence of gene {(filepath,geneName):sequence}
 
@@ -30,16 +32,110 @@ class ExampleApp(QMainWindow, myGui_Beta.Ui_clusterArch):
         self.addGeneBtn.clicked.connect(self.loadGene)
         self.addHMMbtn.clicked.connect(self.loadHMM)
 
+        self.removeSearchTermBtn.clicked.connect(self.removeSearchTerm)
+
         self.clearGeneBtn.clicked.connect(self.clearGene)
         self.clearHMMbtn.clicked.connect(self.clearHMM)
 
+        self.runSearch.clicked.connect(self.runSearchFunction)
+
         self.closeBtn.clicked.connect(QCoreApplication.instance().quit)
 
+        self.dataBaseSelector.currentIndexChanged.connect(self.databaseFunction)
+        self.outputDirectorySelector.currentIndexChanged.connect(self.outdirFunction)
+
+    def runSearchFunction(self):
+        global outputDir,hmmDict,geneDict,hmmDict,pathToDatabase
+
+        ## Run Checks
+
+        if not outputDir:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('Please Specify An Output Directory')
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+        elif not pathToDatabase:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('Please Specify A Database to Query')
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+        elif not os.access(outputDir, os.W_OK):
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('Cannot Write to Output Folder Specified')
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+        elif not os.access(pathToDatabase, os.R_OK):
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('Cannot Read Database')
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+
+        ## Get Tasklist from searchList
+
+        ## See if BLAST DB exists, make one if not
+
+        ## Generate Fasta query file
+
+        ## Generate HMM Query FIle
+
+        ## Blast
+
+        ## Hmmer
+
+    def removeSearchTerm(self):
+        global forHmmer,forBLAST,hmmDict,geneDict,verbose
+
+        itemType =  self.searchList.item(self.searchList.currentRow(),0).text()
+        termToRemove = self.searchList.item(self.searchList.currentRow(),1).text()
+
+        if itemType == 'GENE':
+            if verbose: print("Deleted %s" % termToRemove)
+            del forBLAST[termToRemove]
+            self.searchList.removeRow(self.searchList.currentRow())
+        elif itemType == 'HMMER Hits':
+            hmmKey = tuple(sorted(termToRemove.split(' and ')))
+            hmmerSearchTerms = Counter()
+            for idx in range(self.searchList.rowCount()):
+                if self.searchList.item(idx,0).text() == 'HMMER Hits':
+                    hmmerSearchTerms[tuple(sorted(self.searchList.item(idx,1).text().split(' and ')))] += 1
+            if hmmerSearchTerms[hmmKey] <= 1:
+                del forHmmer[hmmKey]
+            if verbose: print(forHmmer)
+            self.searchList.removeRow(self.searchList.currentRow())
+
+    def outdirFunction(self):
+        global outputDir,verbose
+        if 'Select Directory...' in self.outputDirectorySelector.currentText():
+            dirName = QFileDialog.getExistingDirectory(self)
+            if dirName:
+                self.outputDirectorySelector.addItem(dirName)
+                self.outputDirectorySelector.setCurrentIndex(self.outputDirectorySelector.count()-1)
+        if 'Select Directory...' not in self.outputDirectorySelector.currentText():
+            outputDir = self.outputDirectorySelector.currentText()
+            if verbose: print(outputDir)
+
+    def databaseFunction(self):
+        global pathToDatabase,verbose
+        if 'add database...' in self.dataBaseSelector.currentText():
+            fileName, _ = QFileDialog.getOpenFileName(self)
+            if fileName:
+                self.dataBaseSelector.addItem(fileName)
+                self.dataBaseSelector.setCurrentIndex(self.dataBaseSelector.count()-1)
+        if 'add database...' not in self.dataBaseSelector.currentText():
+            pathToDatabase = self.dataBaseSelector.currentText()
+            if verbose: print(pathToDatabase)
+
     def openGene(self):
+        global verbose
         fileName, _ = QFileDialog.getOpenFileName(self)
-        print(fileName)
+        if verbose: print(fileName)
         if fileName:
             self.GeneFilePath.setText(fileName)
+
     def loadGeneFile(self):
         global geneDict
         if self.GeneFilePath.text():
@@ -57,11 +153,14 @@ class ExampleApp(QMainWindow, myGui_Beta.Ui_clusterArch):
                 msg.setStandardButtons(QMessageBox.Ok)
                 msg.buttonClicked.connect(self.clearGeneFilePath)
                 msg.exec()
+
     def openHmm(self):
+        global verbose
         fileName, _ = QFileDialog.getOpenFileName(self)
-        print(fileName)
+        if verbose: print(fileName)
         if fileName:
             self.hmmFilePath.setText(fileName)
+
     def loadHMMFile(self):
         global hmmDict
         if self.hmmFilePath.text():
@@ -69,11 +168,12 @@ class ExampleApp(QMainWindow, myGui_Beta.Ui_clusterArch):
             for hmm in hmmsToAdd:
                 self.hmmList.addItem(hmm)
             self.clearHmmFilePath()
+
     def loadGene(self):
-        global forBLAST,geneDict
+        global forBLAST,geneDict,verbose
         genesToAdd = self.geneList.selectedItems()
         for gene in genesToAdd:
-            print(gene.text())
+            if verbose: (gene.text())
             if gene.text() not in forBLAST.keys():
                 currentRowCount = self.searchList.rowCount()
                 self.searchList.insertRow(currentRowCount)
@@ -82,23 +182,24 @@ class ExampleApp(QMainWindow, myGui_Beta.Ui_clusterArch):
                 forBLAST[gene.text()] = geneDict[gene.text()]
 
     def loadHMM(self):
-        # hmmDict -> {hmmFile:hmmsToConsider}
-        global hmmDict,forHmmer
-        hmmsToAdd = self.hmmList.selectedItems()
-        hmmList = []
-        for hmmObject in hmmsToAdd:
-            hmmName = hmmObject.text()
-            hmmList.append(hmmName)
-            hmmSourceFile = hmmDict[hmmName]
-            hmmsToConsider = forHmmer.get(hmmSourceFile,set())
-            hmmsToConsider.add(hmmName)
-            forHmmer[hmmSourceFile] = hmmsToConsider
-        currentRowCount = self.searchList.rowCount()
-        self.searchList.insertRow(currentRowCount)
-        self.searchList.setItem(currentRowCount, 0, QTableWidgetItem('HMMER Hits'))
-        self.searchList.setItem(currentRowCount, 1, QTableWidgetItem(' and '.join(hmmList)))
-        self.hmmList.clearSelection()
-
+        # hmmDict -> {(hmmset):set(paths to hmms)}
+        global hmmDict,forHmmer,verbose
+        hmmsToAdd = tuple(sorted(hmmObject.text() for hmmObject in self.hmmList.selectedItems()))
+        if hmmsToAdd:
+            forHmmer[hmmsToAdd] = set(hmmDict[hmm] for hmm in hmmsToAdd)
+            currentRowCount = self.searchList.rowCount()
+            self.searchList.insertRow(currentRowCount)
+            self.searchList.setItem(currentRowCount, 0, QTableWidgetItem('HMMER Hits'))
+            self.searchList.setItem(currentRowCount, 1, QTableWidgetItem(' and '.join(hmmsToAdd)))
+            if verbose:
+                print(forHmmer)
+            self.hmmList.clearSelection()
+        else:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Warning)
+            msg.setText('No HMMs Selected')
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
 
     def clearGeneFilePath(self):
         self.GeneFilePath.setText('')
@@ -109,17 +210,25 @@ class ExampleApp(QMainWindow, myGui_Beta.Ui_clusterArch):
         global geneDict
         self.geneList.clear()
         geneDict = dict()
+
     def clearHMM(self):
         global hmmDict
         self.hmmList.clear()
         hmmDict = dict()
 
 def main():
-    global geneDict,hmmDict,forBLAST,forHmmer
+
+    global geneDict,hmmDict,forBLAST,forHmmer,pathToDatabase,blastExecutable,hmmerExecutable,verbose,outputDir
+
+    verbose = True
+
     geneDict = dict()
     hmmDict = dict()
     forBLAST = dict()
     forHmmer = dict()
+    pathToDatabase = ''
+    outputDir = ''
+
     app = QApplication(sys.argv)  # A new instance of QApplication
     form = ExampleApp()                 # We set the form to be our ExampleApp (design)
     form.show()                         # Show the form

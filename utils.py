@@ -1,4 +1,25 @@
 from Bio import SeqIO
+from Bio.SeqRecord import SeqRecord
+import sys,subprocess
+
+def execute(commands, input=None):
+    "Execute commands in a system-independent manner"
+
+    if input is not None:
+        stdin_redir = subprocess.PIPE
+    else:
+        stdin_redir = None
+
+    try:
+        proc = subprocess.Popen(commands, stdin=stdin_redir,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE)
+        out, err = proc.communicate(input=input)
+        retcode = proc.returncode
+        return out, err, retcode
+    except OSError as e:
+        print("%r %r returned %r" % (commands, input[:40] if input is not None else None, e))
+        raise
 
 def parseSeqFile(SeqFilePath,geneDict):
     extension = SeqFilePath.split('.')[-1]
@@ -51,3 +72,47 @@ def parseHMMfile(HMMfilePath,HMMdict):
     for hmm in hmmsToAdd:
         HMMdict[hmm] = HMMfilePath
     return hmmsToAdd,HMMdict
+
+def MakeBlastDB(makeblastdbExec,dbPath):
+    command = [makeblastdbExec, "-in", dbPath, "-dbtype", "prot"]
+    out, err, retcode = execute(command)
+    if retcode != 0:
+        print('makeblastDB failed with retcode %d: %r' % (retcode, err))
+    return out,err,retcode
+
+def runBLAST(blastExec,inputFastas,outFolder,dbPath,eValue='1E-05'):
+    command = [blastExec, "-db", dbPath, "-query", inputFastas, "-outfmt", "6", "-max_target_seqs", "10000", "-evalue",
+               eValue, "-out", outFolder + "_blast.out"]
+    out, err, retcode = execute(command)
+    if retcode != 0:
+        print('BLAST failed with retcode %d: %r' % (retcode, err))
+    return out,err,retcode
+
+def runHmmsearch(hmmSearchExec,hmmDBase,outFolder,dbPath,eValue='1E-05'):
+    command = [hmmSearchExec,'--domtblout', outFolder+'_hmmSearch.out', '--noali',
+               '-E', eValue, hmmDBase, dbPath]
+    out, err, retcode = execute(command)
+    if retcode != 0:
+        print('hmmsearch failed with retcode %d: %r' % (retcode, err))
+    return out,err,retcode
+
+def generateInputFasta(geneList,geneDict,outFolder):
+    with open('%s/gene_queries.fa' % outFolder,'w') as outfile:
+        for gene in geneList:
+            prot_entry = SeqRecord(geneDict[gene], id=gene,
+                               description='%s' % (gene))
+            SeqIO.write(prot_entry,outfile,'fasta')
+
+def generateHMMdb(hmmFetchExec,hmmDict,hmmSet,outFolder):
+    errFlag = False
+    failedToFetch = set()
+    with open('%s/hmmDB.hmm' % outFolder,'wb') as outfile:
+        for hmm in hmmSet:
+            out, err, retcode = execute([hmmFetchExec, hmmDict[hmm], hmmDict[hmm]])
+            if retcode == 0:
+                outfile.write(out)
+            else:
+                print('hmmfetch failed with retcode %d: %r' % (retcode, err))
+                errFlag = True
+                failedToFetch.add(hmm)
+    return errFlag,failedToFetch

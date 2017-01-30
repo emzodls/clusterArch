@@ -6,12 +6,15 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
-    <height>600</height>
+    <width>822</width>
+    <height>618</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>clusterArch</string>
+  </property>
+  <property name="unifiedTitleAndToolBarOnMac">
+   <bool>true</bool>
   </property>
   <widget class="QWidget" name="centralwidget">
    <widget class="QPushButton" name="addGenefileBtn">
@@ -34,7 +37,7 @@
     <property name="geometry">
      <rect>
       <x>200</x>
-      <y>290</y>
+      <y>300</y>
       <width>111</width>
       <height>21</height>
      </rect>
@@ -47,13 +50,13 @@
     <property name="geometry">
      <rect>
       <x>30</x>
-      <y>490</y>
-      <width>101</width>
-      <height>23</height>
+      <y>500</y>
+      <width>111</width>
+      <height>21</height>
      </rect>
     </property>
     <property name="text">
-     <string>add</string>
+     <string>add HMM hits</string>
     </property>
    </widget>
    <widget class="QListWidget" name="geneList">
@@ -72,23 +75,23 @@
    <widget class="QPushButton" name="closeBtn">
     <property name="geometry">
      <rect>
-      <x>690</x>
-      <y>480</y>
-      <width>101</width>
-      <height>23</height>
+      <x>680</x>
+      <y>520</y>
+      <width>91</width>
+      <height>21</height>
      </rect>
     </property>
     <property name="text">
-     <string>close</string>
+     <string>Close</string>
     </property>
    </widget>
    <widget class="QPushButton" name="clearGeneBtn">
     <property name="geometry">
      <rect>
       <x>210</x>
-      <y>240</y>
+      <y>250</y>
       <width>101</width>
-      <height>23</height>
+      <height>21</height>
      </rect>
     </property>
     <property name="text">
@@ -99,9 +102,9 @@
     <property name="geometry">
      <rect>
       <x>210</x>
-      <y>490</y>
+      <y>500</y>
       <width>101</width>
-      <height>23</height>
+      <height>21</height>
      </rect>
     </property>
     <property name="text">
@@ -112,20 +115,20 @@
     <property name="geometry">
      <rect>
       <x>30</x>
-      <y>240</y>
-      <width>101</width>
-      <height>23</height>
+      <y>250</y>
+      <width>111</width>
+      <height>21</height>
      </rect>
     </property>
     <property name="text">
-     <string>add</string>
+     <string>add Gene</string>
     </property>
    </widget>
    <widget class="QListWidget" name="hmmList">
     <property name="geometry">
      <rect>
       <x>30</x>
-      <y>321</y>
+      <y>330</y>
       <width>281</width>
       <height>171</height>
      </rect>
@@ -138,7 +141,7 @@
     <property name="geometry">
      <rect>
       <x>30</x>
-      <y>270</y>
+      <y>280</y>
       <width>281</width>
       <height>21</height>
      </rect>
@@ -148,7 +151,7 @@
     <property name="geometry">
      <rect>
       <x>30</x>
-      <y>290</y>
+      <y>300</y>
       <width>111</width>
       <height>21</height>
      </rect>
@@ -189,10 +192,10 @@
    <widget class="QTableWidget" name="searchList">
     <property name="geometry">
      <rect>
-      <x>410</x>
-      <y>60</y>
-      <width>371</width>
-      <height>401</height>
+      <x>320</x>
+      <y>20</y>
+      <width>451</width>
+      <height>381</height>
      </rect>
     </property>
     <property name="sizePolicy">
@@ -201,8 +204,14 @@
       <verstretch>0</verstretch>
      </sizepolicy>
     </property>
+    <property name="sizeAdjustPolicy">
+     <enum>QAbstractScrollArea::AdjustToContents</enum>
+    </property>
+    <property name="editTriggers">
+     <set>QAbstractItemView::NoEditTriggers</set>
+    </property>
     <property name="selectionMode">
-     <enum>QAbstractItemView::NoSelection</enum>
+     <enum>QAbstractItemView::SingleSelection</enum>
     </property>
     <property name="columnCount">
      <number>2</number>
@@ -218,13 +227,113 @@
      </property>
     </column>
    </widget>
+   <widget class="QComboBox" name="dataBaseSelector">
+    <property name="geometry">
+     <rect>
+      <x>440</x>
+      <y>450</y>
+      <width>331</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="currentIndex">
+     <number>-1</number>
+    </property>
+    <property name="insertPolicy">
+     <enum>QComboBox::InsertAtTop</enum>
+    </property>
+    <property name="sizeAdjustPolicy">
+     <enum>QComboBox::AdjustToContentsOnFirstShow</enum>
+    </property>
+    <item>
+     <property name="text">
+      <string>add database...</string>
+     </property>
+    </item>
+   </widget>
+   <widget class="QLabel" name="databaseLabel">
+    <property name="geometry">
+     <rect>
+      <x>320</x>
+      <y>450</y>
+      <width>121</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Database to Query:</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="runSearch">
+    <property name="geometry">
+     <rect>
+      <x>560</x>
+      <y>520</y>
+      <width>111</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Run Search</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="removeSearchTermBtn">
+    <property name="geometry">
+     <rect>
+      <x>650</x>
+      <y>410</y>
+      <width>121</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Remove Term</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="databaseLabel_2">
+    <property name="geometry">
+     <rect>
+      <x>330</x>
+      <y>480</y>
+      <width>111</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Output Directory:</string>
+    </property>
+   </widget>
+   <widget class="QComboBox" name="outputDirectorySelector">
+    <property name="geometry">
+     <rect>
+      <x>440</x>
+      <y>480</y>
+      <width>331</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="currentIndex">
+     <number>-1</number>
+    </property>
+    <property name="insertPolicy">
+     <enum>QComboBox::InsertAtTop</enum>
+    </property>
+    <property name="sizeAdjustPolicy">
+     <enum>QComboBox::AdjustToContentsOnFirstShow</enum>
+    </property>
+    <item>
+     <property name="text">
+      <string>Select Directory...</string>
+     </property>
+    </item>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>800</width>
+     <width>822</width>
      <height>22</height>
     </rect>
    </property>
