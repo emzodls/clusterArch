@@ -1,6 +1,31 @@
+# Copyright (C) 2017 Emmanuel LC. de los Santos
+# University of Warwick
+# Warwick Integrative Synthetic Biology Centre
+#
+# License: GNU Affero General Public License v3 or later
+# A copy of GNU AGPL v3 should have been included in this software package in LICENSE.txt.
+'''
+    This file is part of clusterTools.
+
+    clusterTools is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    clusterTools is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with clusterTools.  If not, see <http://www.gnu.org/licenses/>.
+'''
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
-import sys,subprocess
+from Bio.Seq import Seq
+from Bio.Alphabet import generic_protein
+from clusterTools import clusterAnalysis
+import sys,subprocess,os
 
 def execute(commands, input=None):
     "Execute commands in a system-independent manner"
@@ -73,42 +98,42 @@ def parseHMMfile(HMMfilePath,HMMdict):
         HMMdict[hmm] = HMMfilePath
     return hmmsToAdd,HMMdict
 
-def MakeBlastDB(makeblastdbExec,dbPath):
-    command = [makeblastdbExec, "-in", dbPath, "-dbtype", "prot"]
+def MakeBlastDB(makeblastdbExec,dbPath,outputDir,outDBName):
+    command = [makeblastdbExec, "-in", dbPath, "-dbtype", "prot","-out",os.path.join(outputDir,outDBName)]
     out, err, retcode = execute(command)
     if retcode != 0:
         print('makeblastDB failed with retcode %d: %r' % (retcode, err))
     return out,err,retcode
 
-def runBLAST(blastExec,inputFastas,outFolder,dbPath,eValue='1E-05'):
+def runBLAST(blastExec,inputFastas,outputDir,dbPath,eValue='1E-05'):
     command = [blastExec, "-db", dbPath, "-query", inputFastas, "-outfmt", "6", "-max_target_seqs", "10000", "-evalue",
-               eValue, "-out", outFolder + "_blast.out"]
+               eValue, "-out", outputDir + "/blast_results.out"]
     out, err, retcode = execute(command)
     if retcode != 0:
         print('BLAST failed with retcode %d: %r' % (retcode, err))
     return out,err,retcode
 
-def runHmmsearch(hmmSearchExec,hmmDBase,outFolder,dbPath,eValue='1E-05'):
-    command = [hmmSearchExec,'--domtblout', outFolder+'_hmmSearch.out', '--noali',
+def runHmmsearch(hmmSearchExec,hmmDBase,outputDir,dbPath,eValue='1E-05'):
+    command = [hmmSearchExec,'--domtblout', outputDir+'/hmmSearch.out', '--noali',
                '-E', eValue, hmmDBase, dbPath]
     out, err, retcode = execute(command)
     if retcode != 0:
         print('hmmsearch failed with retcode %d: %r' % (retcode, err))
     return out,err,retcode
 
-def generateInputFasta(geneList,geneDict,outFolder):
-    with open('%s/gene_queries.fa' % outFolder,'w') as outfile:
-        for gene in geneList:
-            prot_entry = SeqRecord(geneDict[gene], id=gene,
+def generateInputFasta(forBLAST,outputDir):
+    with open('%s/gene_queries.fa' % outputDir,'w') as outfile:
+        for gene in forBLAST.keys():
+            prot_entry = SeqRecord(Seq(forBLAST[gene],generic_protein), id=gene,
                                description='%s' % (gene))
             SeqIO.write(prot_entry,outfile,'fasta')
 
-def generateHMMdb(hmmFetchExec,hmmDict,hmmSet,outFolder):
+def generateHMMdb(hmmFetchExec,hmmDict,hmmSet,outputDir):
     errFlag = False
     failedToFetch = set()
-    with open('%s/hmmDB.hmm' % outFolder,'wb') as outfile:
+    with open('%s/hmmDB.hmm' % outputDir,'wb') as outfile:
         for hmm in hmmSet:
-            out, err, retcode = execute([hmmFetchExec, hmmDict[hmm], hmmDict[hmm]])
+            out, err, retcode = execute([hmmFetchExec, hmmDict[hmm], hmm])
             if retcode == 0:
                 outfile.write(out)
             else:
@@ -116,3 +141,27 @@ def generateHMMdb(hmmFetchExec,hmmDict,hmmSet,outFolder):
                 errFlag = True
                 failedToFetch.add(hmm)
     return errFlag,failedToFetch
+
+def processSearchList(blastList,hmmList,blastOutFile,hmmOutFile,windowSize = 50000):
+    # Gather all of the proteins, might be a memory issue...code memory friendly version with sequential filters (?)
+    prots = dict()
+    prots = clusterAnalysis.parseBLAST(blastOutFile,prots,swapQuery=True)
+    prots = clusterAnalysis.parse_hmmsearch_domtbl_anot(hmmOutFile,15,'hmm',prots)
+
+    blastDict = {hitName:set(protein for protein in prots.values() if hitName in protein.hit_dict['blast'].hits)
+                  for hitName in blastList}
+    hmmDict = {hmms: set(protein for protein in prots.values() if len(set(hmms) & protein.getAnnotations('hmm')) == len(hmms))
+               for hmms in hmmList}
+    hitDict = {**blastDict,**hmmDict}
+
+    putativeClusters = clusterAnalysis.cluster_proteins(prots.values(),windowSize)
+
+    filteredClusters = dict()
+    for species,clusters in putativeClusters.items():
+        for cluster in clusters:
+            clusterProts = set(protein for protein in cluster)
+            if sum(1 for hitSet in hitDict.values() if len(clusterProts & hitSet) >= 1) == len(hitDict.keys()):
+                filteredClusters[(species,cluster.location[0],cluster.location[1])] = \
+                {hitQuery:[protein.name for protein in (hitSet & clusterProts)] for hitQuery,hitSet in hitDict.items()}
+    return filteredClusters
+
