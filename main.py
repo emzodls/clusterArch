@@ -23,7 +23,7 @@
 
 import os
 from PyQt5.QtCore import (QFile, QFileInfo, QPoint, QRect, QSettings, QSize,
-        Qt, QTextStream,QCoreApplication)
+        Qt, QTextStream,QCoreApplication,QThread,pyqtSignal)
 from PyQt5 import QtGui
 from PyQt5.QtWidgets import (QAction, QApplication, QFileDialog, QMainWindow,
         QMessageBox, QTextEdit,QTableWidgetItem,QWidget,QSizePolicy)
@@ -35,8 +35,40 @@ from glob import iglob
 # Handle back to sequence of gene {(filepath,geneName):sequence}
 
 
-import myGui_Beta,resultsWindow,sys # This file holds our MainWindow and all design related things
+import myGui_Beta,resultsWindow,status,sys # This file holds our MainWindow and all design related things
               # it also keeps events etc that we defined in Qt Designer
+
+class runChecksThread(QThread):
+    checkError = pyqtSignal(str)
+    def __init__(self,outputDir,pathToDatabase):
+        QThread.__init__(self)
+        self.outputDir = outputDir
+        self.pathToDatabase = pathToDatabase
+
+    def __del__(self):
+        self.wait()
+    def run(self):
+        if not self.outputDir:
+            self.checkError.emit('noOutputDir')
+            return
+        elif not self.pathToDatabase:
+            self.checkError.emit('noDBpath')
+            return
+        elif not os.access(self.outputDir, os.W_OK):
+            self.checkError.emit('noWriteOutputDir')
+            return
+        elif not os.access(self.pathToDatabase, os.R_OK):
+            self.checkError.emit('notValidDB')
+            return
+        else:
+            self.checkError.emit('good')
+            return
+
+class statusWindow(QWidget,status.Ui_runSearch):
+    def __init__(self):
+        super(self.__class__,self).__init__()
+        self.setupUi(self)
+
 
 class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
     def __init__(self):
@@ -69,196 +101,211 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
         self.dataBaseSelector.currentIndexChanged.connect(self.databaseFunction)
         self.outputDirectorySelector.currentIndexChanged.connect(self.outdirFunction)
 
-    def runSearchFunction(self):
-        global outputDir,hmmDict,pathToDatabase, forHmmer, forBLAST,hmmFetchExec,makeblastdbExec,blastExec,hmmSearchExec
-
-        ## Run Checks
-
-        if not outputDir:
+    def doneCheck(self,checkErr,statusWin):
+        if checkErr == 'noOutputDir':
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
             msg.setText('Please Specify An Output Directory')
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
-        elif not pathToDatabase:
+        elif checkErr == 'noDBpath':
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
             msg.setText('Please Specify A Database to Query')
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
-        elif not os.access(outputDir, os.W_OK):
+        elif checkErr == 'noWriteOutputDir':
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
             msg.setText('Cannot Write to Output Folder Specified')
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
-        elif not os.access(pathToDatabase, os.R_OK):
+        elif checkErr == 'notValidDB':
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
             msg.setText('Cannot Read Database')
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
+        elif checkErr == 'good':
+            statusWin.percentCmpBar.setValue(statusWin.percentCmpBar.value()+1)
+            statusWin.currentTask.setText('Building Databases.')
+            return
 
-        ## Run BLAST
-        if forBLAST:
-            madeDBflag = False
-            generateInputFasta(forBLAST,outputDir)
-            print('Successfully Generated Input Fasta')
-            baseDir, ext = os.path.splitext(pathToDatabase)
-            phrCheck = iglob(baseDir + '*phr')
-            pinCheck = iglob(baseDir + '*pin')
-            psqCheck = iglob(baseDir + '*psq')
+    def runSearchFunction(self):
+        global outputDir,hmmDict,pathToDatabase, forHmmer, forBLAST,hmmFetchExec,makeblastdbExec,blastExec,hmmSearchExec
 
-            if any(True for _ in phrCheck) and any(True for _ in pinCheck) and any(True for _ in psqCheck):
-                pass
-            else:
-                msg = QMessageBox()
-                msg.setIcon(QMessageBox.Information)
-                msg.setText("BLAST Database not Found, creating BLAST Database in Output directory...")
-                msg.setStandardButtons(QMessageBox.Ok)
-                msg.exec()
-                madeDBflag = True
-                path, outputDBname = os.path.split(pathToDatabase)
-                out, err, retcode = MakeBlastDB(makeblastdbExec, pathToDatabase, outputDir,outputDBname)
-                if retcode != 0:
-                    msg = QMessageBox()
-                    msg.setIcon(QMessageBox.Critical)
-                    msg.setText('No BLAST DB found, creating one failed')
-                    msg.setStandardButtons(QMessageBox.Ok)
-                    msg.exec()
-                    return
-            inputFastas = os.path.join(outputDir, 'gene_queries.fa')
-            if madeDBflag:
-                out, err, retcode = runBLAST(blastExec, inputFastas, outputDir, os.path.join(outputDir, outputDBname),
-                                             eValue='1E-05')
-            else:
-                out, err, retcode = runBLAST(blastExec, inputFastas, outputDir, pathToDatabase, eValue='1E-05')
-            if retcode != 0:
-                msg = QMessageBox()
-                msg.setIcon(QMessageBox.Critical)
-                msg.setText('Blastp Failed')
-                msg.setStandardButtons(QMessageBox.Ok)
-                msg.exec()
-                return
+        self.statusWin = statusWindow()
+        self.statusWin.percentCmpBar.setMaximum(6)
+        self.statusWin.percentCmpBar.setValue(0)
+        self.statusWin.currentTask.setText('Checking Databases and Output Folder.')
+        self.statusWin.show()
 
-        ## Run Hmmer
-        hmmSet = set()
-        hmmSet.update(*forHmmer.keys())
-        if hmmSet:
-            errFlag, failedToFetch = generateHMMdb(hmmFetchExec,hmmDict,hmmSet,outputDir)
-            if errFlag:
-                msg = QMessageBox()
-                msg.setIcon(QMessageBox.Critical)
-                msg.setText('Failed Finding Following HMMs: %s' % ','.join(failedToFetch))
-                msg.setStandardButtons(QMessageBox.Ok)
-                msg.exec()
-                return
-            print('Successfully Generated Input HmmFile')
-            hmmDBase = os.path.join(outputDir,'hmmDB.hmm')
-            out, err, retcode = runHmmsearch(hmmSearchExec, hmmDBase, outputDir, pathToDatabase, eValue='1E-05')
-            if retcode != 0:
-                msg = QMessageBox()
-                msg.setIcon(QMessageBox.Critical)
-                msg.setText('Hmmsearch Failed')
-                msg.setStandardButtons(QMessageBox.Ok)
-                msg.exec()
-                return
+        # ## Run Checks
+        #
+        self.checkThread = runChecksThread(outputDir,pathToDatabase)
+        self.checkThread.checkError.connect(lambda x: self.doneCheck(x,self.statusWin))
+        self.checkThread.start()
 
-        ## Create Task Search Lists from BLAST and HMMER requests and pass it off to helper function
-        blastList = []
-        hmmList =[]
-
-        passBLASTcheck = False
-        passHMMcheck = False
-
-        blastOutFile = outputDir + "/blast_results.out"
-        hmmOutFile = outputDir+'/hmmSearch.out'
-
-        for idx in range(self.searchList.rowCount()):
-            if self.searchList.item(idx, 0).text() == 'HMMER Hits':
-                hmmList.append(tuple(sorted(self.searchList.item(idx,1).text().split(' and '))))
-            elif self.searchList.item(idx, 0).text() == 'GENE':
-                blastList.append(self.searchList.item(idx,1).text())
-        # Check that outputfiles are successfully generated
-        if blastList:
-            try:
-                assert os.path.isfile(blastOutFile) ,"BLAST Hits included in search but no " \
-                                                                        "BLAST output file found"
-                passBLASTcheck = True
-            except AssertionError:
-                msg = QMessageBox()
-                msg.setIcon(QMessageBox.Critical)
-                msg.setText('BLAST Hits included in search but no BLAST output file found!')
-                msg.setStandardButtons(QMessageBox.Ok)
-                msg.exec()
-                return
-        else:
-            passBLASTcheck = True
-        if hmmList:
-            try:
-                assert os.path.isfile(outputDir+'/hmmSearch.out'), "HMMer Hits included in search but no " \
-                                                                        "HMMer output file found"
-                passHMMcheck = True
-            except AssertionError:
-                msg = QMessageBox()
-                msg.setIcon(QMessageBox.Critical)
-                msg.setText('HMMer Hits requested in search but no HMMer output file found!')
-                msg.setStandardButtons(QMessageBox.Ok)
-                msg.exec()
-                return
-        else:
-            passHMMcheck = True
-
-        if passBLASTcheck and passHMMcheck:
-            filteredClusters = processSearchList(blastList,hmmList,blastOutFile,hmmOutFile)
-
-            if filteredClusters:
-                print(filteredClusters)
-                self.resultsWin = QWidget()
-
-                # set up results to print
-
-                resultsUi = resultsWindow.Ui_Results()
-                resultsUi.setupUi(self.resultsWin)
-
-                resultsUi.resultsList.setColumnCount(3+len(blastList)+len(hmmList))
-                resultsUi.resultsList.setHorizontalHeaderItem(0,QTableWidgetItem("Species/Accession ID"))
-                resultsUi.resultsList.setHorizontalHeaderItem(1, QTableWidgetItem("Start"))
-                resultsUi.resultsList.setHorizontalHeaderItem(2, QTableWidgetItem("End"))
-
-                for idx,blastHit in enumerate(blastList):
-                    resultsUi.resultsList.setHorizontalHeaderItem(idx+ 3, QTableWidgetItem(blastHit))
-
-                for idx,hmmHit in enumerate(hmmList):
-                    resultsUi.resultsList.setHorizontalHeaderItem(idx+len(blastList)+3,
-                                                                  QTableWidgetItem(' and '.join(hmmHit)))
-
-                for cluster,hitDict in filteredClusters.items():
-                    currentRowCount = resultsUi.resultsList.rowCount()
-                    resultsUi.resultsList.insertRow(currentRowCount)
-                    resultsUi.resultsList.setItem(currentRowCount, 0, QTableWidgetItem(cluster[0]))
-                    resultsUi.resultsList.setItem(currentRowCount, 1, QTableWidgetItem(str(cluster[1])))
-                    resultsUi.resultsList.setItem(currentRowCount, 2, QTableWidgetItem(str(cluster[2])))
-
-                    for idx,blastHit in enumerate(blastList):
-                        resultsUi.resultsList.setItem(currentRowCount, idx+3,
-                                                      QTableWidgetItem('; '.join(filteredClusters[cluster][blastHit])))
-                    for idx,hmmHit in enumerate(hmmList):
-                        resultsUi.resultsList.setItem(currentRowCount, idx + len(blastList) + 3,
-                                                      QTableWidgetItem('; '.join(filteredClusters[cluster][hmmHit])))
-
-                resultsUi.resultsList.resizeColumnsToContents()
-                resultsUi.resultsList.update()
-
-                self.resultsWin.updateGeometry()
-                self.resultsWin.show()
-            else:
-                msg = QMessageBox()
-                msg.setIcon(QMessageBox.Information)
-                msg.setText('No Hits Found.')
-                msg.setStandardButtons(QMessageBox.Ok)
-                msg.exec()
-                return
+        # ## Run BLAST
+        # if forBLAST:
+        #     madeDBflag = False
+        #     generateInputFasta(forBLAST,outputDir)
+        #     print('Successfully Generated Input Fasta')
+        #     baseDir, ext = os.path.splitext(pathToDatabase)
+        #     phrCheck = iglob(baseDir + '*phr')
+        #     pinCheck = iglob(baseDir + '*pin')
+        #     psqCheck = iglob(baseDir + '*psq')
+        #
+        #     if any(True for _ in phrCheck) and any(True for _ in pinCheck) and any(True for _ in psqCheck):
+        #         pass
+        #     else:
+        #         msg = QMessageBox()
+        #         msg.setIcon(QMessageBox.Information)
+        #         msg.setText("BLAST Database not Found, creating BLAST Database in Output directory...")
+        #         msg.setStandardButtons(QMessageBox.Ok)
+        #         msg.exec()
+        #         madeDBflag = True
+        #         path, outputDBname = os.path.split(pathToDatabase)
+        #         out, err, retcode = MakeBlastDB(makeblastdbExec, pathToDatabase, outputDir,outputDBname)
+        #         if retcode != 0:
+        #             msg = QMessageBox()
+        #             msg.setIcon(QMessageBox.Critical)
+        #             msg.setText('No BLAST DB found, creating one failed')
+        #             msg.setStandardButtons(QMessageBox.Ok)
+        #             msg.exec()
+        #             return
+        #     inputFastas = os.path.join(outputDir, 'gene_queries.fa')
+        #     if madeDBflag:
+        #         out, err, retcode = runBLAST(blastExec, inputFastas, outputDir, os.path.join(outputDir, outputDBname),
+        #                                      eValue='1E-05')
+        #     else:
+        #         out, err, retcode = runBLAST(blastExec, inputFastas, outputDir, pathToDatabase, eValue='1E-05')
+        #     if retcode != 0:
+        #         msg = QMessageBox()
+        #         msg.setIcon(QMessageBox.Critical)
+        #         msg.setText('Blastp Failed')
+        #         msg.setStandardButtons(QMessageBox.Ok)
+        #         msg.exec()
+        #         return
+        #
+        # ## Run Hmmer
+        # hmmSet = set()
+        # hmmSet.update(*forHmmer.keys())
+        # if hmmSet:
+        #     errFlag, failedToFetch = generateHMMdb(hmmFetchExec,hmmDict,hmmSet,outputDir)
+        #     if errFlag:
+        #         msg = QMessageBox()
+        #         msg.setIcon(QMessageBox.Critical)
+        #         msg.setText('Failed Finding Following HMMs: %s' % ','.join(failedToFetch))
+        #         msg.setStandardButtons(QMessageBox.Ok)
+        #         msg.exec()
+        #         return
+        #     print('Successfully Generated Input HmmFile')
+        #     hmmDBase = os.path.join(outputDir,'hmmDB.hmm')
+        #     out, err, retcode = runHmmsearch(hmmSearchExec, hmmDBase, outputDir, pathToDatabase, eValue='1E-05')
+        #     if retcode != 0:
+        #         msg = QMessageBox()
+        #         msg.setIcon(QMessageBox.Critical)
+        #         msg.setText('Hmmsearch Failed')
+        #         msg.setStandardButtons(QMessageBox.Ok)
+        #         msg.exec()
+        #         return
+        #
+        # ## Create Task Search Lists from BLAST and HMMER requests and pass it off to helper function
+        # blastList = []
+        # hmmList =[]
+        #
+        # passBLASTcheck = False
+        # passHMMcheck = False
+        #
+        # blastOutFile = outputDir + "/blast_results.out"
+        # hmmOutFile = outputDir+'/hmmSearch.out'
+        #
+        # for idx in range(self.searchList.rowCount()):
+        #     if self.searchList.item(idx, 0).text() == 'HMMER Hits':
+        #         hmmList.append(tuple(sorted(self.searchList.item(idx,1).text().split(' and '))))
+        #     elif self.searchList.item(idx, 0).text() == 'GENE':
+        #         blastList.append(self.searchList.item(idx,1).text())
+        # # Check that outputfiles are successfully generated
+        # if blastList:
+        #     try:
+        #         assert os.path.isfile(blastOutFile) ,"BLAST Hits included in search but no " \
+        #                                                                 "BLAST output file found"
+        #         passBLASTcheck = True
+        #     except AssertionError:
+        #         msg = QMessageBox()
+        #         msg.setIcon(QMessageBox.Critical)
+        #         msg.setText('BLAST Hits included in search but no BLAST output file found!')
+        #         msg.setStandardButtons(QMessageBox.Ok)
+        #         msg.exec()
+        #         return
+        # else:
+        #     passBLASTcheck = True
+        # if hmmList:
+        #     try:
+        #         assert os.path.isfile(outputDir+'/hmmSearch.out'), "HMMer Hits included in search but no " \
+        #                                                                 "HMMer output file found"
+        #         passHMMcheck = True
+        #     except AssertionError:
+        #         msg = QMessageBox()
+        #         msg.setIcon(QMessageBox.Critical)
+        #         msg.setText('HMMer Hits requested in search but no HMMer output file found!')
+        #         msg.setStandardButtons(QMessageBox.Ok)
+        #         msg.exec()
+        #         return
+        # else:
+        #     passHMMcheck = True
+        #
+        # if passBLASTcheck and passHMMcheck:
+        #     filteredClusters = processSearchList(blastList,hmmList,blastOutFile,hmmOutFile)
+        #
+        #     if filteredClusters:
+        #         print(filteredClusters)
+        #         self.resultsWin = QWidget()
+        #
+        #         # set up results to print
+        #
+        #         resultsUi = resultsWindow.Ui_Results()
+        #         resultsUi.setupUi(self.resultsWin)
+        #
+        #         resultsUi.resultsList.setColumnCount(3+len(blastList)+len(hmmList))
+        #         resultsUi.resultsList.setHorizontalHeaderItem(0,QTableWidgetItem("Species/Accession ID"))
+        #         resultsUi.resultsList.setHorizontalHeaderItem(1, QTableWidgetItem("Start"))
+        #         resultsUi.resultsList.setHorizontalHeaderItem(2, QTableWidgetItem("End"))
+        #
+        #         for idx,blastHit in enumerate(blastList):
+        #             resultsUi.resultsList.setHorizontalHeaderItem(idx+ 3, QTableWidgetItem(blastHit))
+        #
+        #         for idx,hmmHit in enumerate(hmmList):
+        #             resultsUi.resultsList.setHorizontalHeaderItem(idx+len(blastList)+3,
+        #                                                           QTableWidgetItem(' and '.join(hmmHit)))
+        #
+        #         for cluster,hitDict in filteredClusters.items():
+        #             currentRowCount = resultsUi.resultsList.rowCount()
+        #             resultsUi.resultsList.insertRow(currentRowCount)
+        #             resultsUi.resultsList.setItem(currentRowCount, 0, QTableWidgetItem(cluster[0]))
+        #             resultsUi.resultsList.setItem(currentRowCount, 1, QTableWidgetItem(str(cluster[1])))
+        #             resultsUi.resultsList.setItem(currentRowCount, 2, QTableWidgetItem(str(cluster[2])))
+        #
+        #             for idx,blastHit in enumerate(blastList):
+        #                 resultsUi.resultsList.setItem(currentRowCount, idx+3,
+        #                                               QTableWidgetItem('; '.join(filteredClusters[cluster][blastHit])))
+        #             for idx,hmmHit in enumerate(hmmList):
+        #                 resultsUi.resultsList.setItem(currentRowCount, idx + len(blastList) + 3,
+        #                                               QTableWidgetItem('; '.join(filteredClusters[cluster][hmmHit])))
+        #
+        #         resultsUi.resultsList.resizeColumnsToContents()
+        #         resultsUi.resultsList.update()
+        #
+        #         self.resultsWin.updateGeometry()
+        #         self.resultsWin.show()
+        #     else:
+        #         msg = QMessageBox()
+        #         msg.setIcon(QMessageBox.Information)
+        #         msg.setText('No Hits Found.')
+        #         msg.setStandardButtons(QMessageBox.Ok)
+        #         msg.exec()
+        #         return
 
     def removeSearchTerm(self):
         global forHmmer,forBLAST,hmmDict,geneDict,verbose
