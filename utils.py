@@ -145,12 +145,19 @@ def generateHMMdb(hmmFetchExec,hmmDict,hmmSet,outputDir):
 def processSearchList(blastList,hmmList,blastOutFile,hmmOutFile,windowSize = 50000):
     # Gather all of the proteins, might be a memory issue...code memory friendly version with sequential filters (?)
     prots = dict()
-    prots = clusterAnalysis.parseBLAST(blastOutFile,prots,swapQuery=True)
-    prots = clusterAnalysis.parse_hmmsearch_domtbl_anot(hmmOutFile,15,'hmm',prots)
+    if blastList:
+        prots = clusterAnalysis.parseBLAST(blastOutFile,prots,swapQuery=True)
+    if hmmList:
+        prots = clusterAnalysis.parse_hmmsearch_domtbl_anot(hmmOutFile,15,'hmm',prots)
 
-    blastDict = {hitName:set(protein for protein in prots.values() if hitName in protein.hit_dict['blast'].hits)
+    blastDict = dict()
+    hmmDict = dict()
+
+    if blastList:
+        blastDict = {hitName:set(protein for protein in prots.values() if hitName in protein.hit_dict['blast'].hits)
                   for hitName in blastList}
-    hmmDict = {hmms: set(protein for protein in prots.values() if len(set(hmms) & protein.getAnnotations('hmm')) == len(hmms))
+    if hmmList:
+        hmmDict = {hmms: set(protein for protein in prots.values() if len(set(hmms) & protein.getAnnotations('hmm')) == len(hmms))
                for hmms in hmmList}
     hitDict = {**blastDict,**hmmDict}
 
@@ -163,5 +170,35 @@ def processSearchList(blastList,hmmList,blastOutFile,hmmOutFile,windowSize = 500
             if sum(1 for hitSet in hitDict.values() if len(clusterProts & hitSet) >= 1) == len(hitDict.keys()):
                 filteredClusters[(species,cluster.location[0],cluster.location[1])] = \
                 {hitQuery:[protein.name for protein in (hitSet & clusterProts)] for hitQuery,hitSet in hitDict.items()}
+    return filteredClusters
+
+def processSearchListProt(blastList,hmmList,blastOutFile,hmmOutFile,windowSize = 50000):
+    # Gather all of the proteins, might be a memory issue...code memory friendly version with sequential filters (?)
+    prots = dict()
+    if blastList:
+        prots = clusterAnalysis.parseBLAST(blastOutFile,prots,swapQuery=True)
+    if hmmList:
+        prots = clusterAnalysis.parse_hmmsearch_domtbl_anot(hmmOutFile,15,'hmm',prots)
+
+    blastDict = dict()
+    hmmDict = dict()
+
+    if blastList:
+        blastDict = {hitName:set(protein for protein in prots.values() if hitName in protein.hit_dict['blast'].hits)
+                  for hitName in blastList}
+    if hmmList:
+        hmmDict = {hmms: set(protein for protein in prots.values() if len(set(hmms) & protein.getAnnotations('hmm')) == len(hmms))
+               for hmms in hmmList}
+    hitDict = {**blastDict,**hmmDict}
+
+    putativeClusters = clusterAnalysis.cluster_proteins(prots.values(),windowSize)
+
+    filteredClusters = dict()
+    for species,clusters in putativeClusters.items():
+        for cluster in clusters:
+            clusterProts = set(protein for protein in cluster)
+            if sum(1 for hitSet in hitDict.values() if len(clusterProts & hitSet) >= 1) == len(hitDict.keys()):
+                filteredClusters[(species,cluster.location[0],cluster.location[1])] = \
+                {hitQuery:[(protein.name,protein.idx,protein) for protein in (hitSet & clusterProts)] for hitQuery,hitSet in hitDict.items()}
     return filteredClusters
 

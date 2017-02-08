@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>367</width>
-    <height>139</height>
+    <height>160</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -30,7 +30,7 @@
    <item>
     <widget class="QLabel" name="currentTask">
      <property name="text">
-      <string>Building BLAST Database</string>
+      <string>Running Checks</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignCenter</set>
@@ -49,27 +49,44 @@
      <item>
       <widget class="QLabel" name="percentCmpLabel">
        <property name="text">
-        <string>0%</string>
+        <string>1/6</string>
        </property>
       </widget>
      </item>
     </layout>
    </item>
-   <item alignment="Qt::AlignHCenter">
-    <widget class="QPushButton" name="viewResultsBtn">
-     <property name="enabled">
-      <bool>false</bool>
-     </property>
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="text">
-      <string>View Results</string>
-     </property>
-    </widget>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_2">
+     <item>
+      <widget class="QPushButton" name="cancelBtn">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="text">
+        <string>Cancel </string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="viewResultsBtn">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="text">
+        <string>View Results</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
   </layout>
  </widget>

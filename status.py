@@ -11,7 +11,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_runSearch(object):
     def setupUi(self, runSearch):
         runSearch.setObjectName("runSearch")
-        runSearch.resize(367, 139)
+        runSearch.resize(367, 160)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
@@ -36,6 +36,16 @@ class Ui_runSearch(object):
         self.percentCmpLabel.setObjectName("percentCmpLabel")
         self.horizontalLayout.addWidget(self.percentCmpLabel)
         self.verticalLayout.addLayout(self.horizontalLayout)
+        self.horizontalLayout_2 = QtWidgets.QHBoxLayout()
+        self.horizontalLayout_2.setObjectName("horizontalLayout_2")
+        self.cancelBtn = QtWidgets.QPushButton(runSearch)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.cancelBtn.sizePolicy().hasHeightForWidth())
+        self.cancelBtn.setSizePolicy(sizePolicy)
+        self.cancelBtn.setObjectName("cancelBtn")
+        self.horizontalLayout_2.addWidget(self.cancelBtn)
         self.viewResultsBtn = QtWidgets.QPushButton(runSearch)
         self.viewResultsBtn.setEnabled(False)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
@@ -44,7 +54,8 @@ class Ui_runSearch(object):
         sizePolicy.setHeightForWidth(self.viewResultsBtn.sizePolicy().hasHeightForWidth())
         self.viewResultsBtn.setSizePolicy(sizePolicy)
         self.viewResultsBtn.setObjectName("viewResultsBtn")
-        self.verticalLayout.addWidget(self.viewResultsBtn, 0, QtCore.Qt.AlignHCenter)
+        self.horizontalLayout_2.addWidget(self.viewResultsBtn)
+        self.verticalLayout.addLayout(self.horizontalLayout_2)
 
         self.retranslateUi(runSearch)
         QtCore.QMetaObject.connectSlotsByName(runSearch)
@@ -53,7 +64,8 @@ class Ui_runSearch(object):
         _translate = QtCore.QCoreApplication.translate
         runSearch.setWindowTitle(_translate("runSearch", "Search Status"))
         self.title.setText(_translate("runSearch", "Running Architecture Search:"))
-        self.currentTask.setText(_translate("runSearch", "Building BLAST Database"))
-        self.percentCmpLabel.setText(_translate("runSearch", "0%"))
+        self.currentTask.setText(_translate("runSearch", "Running Checks"))
+        self.percentCmpLabel.setText(_translate("runSearch", "1/6"))
+        self.cancelBtn.setText(_translate("runSearch", "Cancel "))
         self.viewResultsBtn.setText(_translate("runSearch", "View Results"))
 
