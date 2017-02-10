@@ -25,6 +25,7 @@ from Bio.SeqRecord import SeqRecord
 from Bio.Seq import Seq
 from Bio.Alphabet import generic_protein
 from clusterTools import clusterAnalysis
+from random import random
 import sys,subprocess,os
 
 def execute(commands, input=None):
@@ -206,91 +207,92 @@ def proccessGbks(taskList,outputDir,signal):
     # make sure species list is unique
     speciesList = set()
     for gbkFile in taskList:
-        genbank_entries = SeqIO.parse(open(gbkFile), "genbank")
+        try:
+            genbank_entries = SeqIO.parse(open(gbkFile), "genbank")
 
-        path,fileName = os.path.split(gbkFile)
-        species_id,ext = os.path.splitext(fileName)
-        signal.emit(fileName)
-        CDS_prot_outfile_name = os.path.join(outputDir,'clusterArchDB.fasta')
-        cds_ctr = 0
-        entry_ctr = 1
-        # See if user wants a different name
-        for genbank_entry in genbank_entries:
-            # Default to filename if not in genbank entry
-            if '' != genbank_entry.name:
-                species_id = genbank_entry.name
-            elif '' != genbank_entry.id:
-                species_id = genbank_entry.id
-            if species_id in speciesList:
+            path,fileName = os.path.split(gbkFile)
+            species_id,ext = os.path.splitext(fileName)
+            signal.emit(fileName)
+            CDS_prot_outfile_name = os.path.join(outputDir,'clusterArchDB.fasta')
+            cds_ctr = 0
+            entry_ctr = 1
+            # See if user wants a different name
+            for genbank_entry in genbank_entries:
                 species_id = species_id + '.entry%.3i' % entry_ctr
-                speciesList.add(species_id)
-            else:
-                speciesList.add(species_id)
-
-            CDS_list = (feature for feature in genbank_entry.features if feature.type == 'CDS')
-
-            for CDS in CDS_list:
-                cds_ctr += 1
-                direction = CDS.location.strand
-                # Ensure that you don't get negative values, Biopython parser will not ignore slices that are greater
-                # than the entry so you don't need to worry about the other direction
-                internal_id = "%s_CDS_%.5i" % (species_id, cds_ctr)
-                protein_id = internal_id
-
-                gene_start = max(0, CDS.location.nofuzzy_start)
-                gene_end = max(0, CDS.location.nofuzzy_end)
-                genbank_seq = CDS.location.extract(genbank_entry)
-                nt_seq = genbank_seq.seq
-
-                # Try to find a common name for the promoter, otherwise just use the internal ID
-                if 'protein_id' in CDS.qualifiers.keys():
-                    protein_id = CDS.qualifiers['protein_id'][0]
+                # check for uniqueness, if there is already an entry on the list insert random number
+                if species_id in speciesList:
+                    splitSpecies = species_id.split('.entry')[0]
+                    species_id = splitSpecies + '%.5i.'+'.entry%.3i' % ((random()*10000),entry_ctr)
+                    speciesList.add(species_id)
                 else:
-                    for feature in genbank_seq.features:
-                        if 'locus_tag' in feature.qualifiers:
-                            protein_id = feature.qualifiers['locus_tag'][0]
+                    speciesList.add(species_id)
+                CDS_list = (feature for feature in genbank_entry.features if feature.type == 'CDS')
+                for CDS in CDS_list:
+                    cds_ctr += 1
+                    direction = CDS.location.strand
+                    # Ensure that you don't get negative values, Biopython parser will not ignore slices that are greater
+                    # than the entry so you don't need to worry about the other direction
+                    internal_id = "%s_CDS_%.5i" % (species_id, cds_ctr)
+                    protein_id = internal_id
 
-                if 'translation' in CDS.qualifiers.keys():
-                    prot_seq = Seq.Seq(CDS.qualifiers['translation'][0])
-                    if direction == 1:
-                        direction_id = '+'
+                    gene_start = max(0, CDS.location.nofuzzy_start)
+                    gene_end = max(0, CDS.location.nofuzzy_end)
+                    genbank_seq = CDS.location.extract(genbank_entry)
+                    nt_seq = genbank_seq.seq
+
+                    # Try to find a common name for the promoter, otherwise just use the internal ID
+                    if 'protein_id' in CDS.qualifiers.keys():
+                        protein_id = CDS.qualifiers['protein_id'][0]
                     else:
-                        direction_id = '-'
-                else:
-                    if direction == 1:
-                        direction_id = '+'
-                        # for protein sequence if it is at the start of the entry assume that end of sequence is in frame
-                        # if it is at the end of the genbank entry assume that the start of the sequence is in frame
-                        if gene_start == 0:
-                            if len(nt_seq) % 3 == 0:
-                                prot_seq = nt_seq.translate()
-                            elif len(nt_seq) % 3 == 1:
-                                prot_seq = nt_seq[1:].translate()
-                            else:
-                                prot_seq = nt_seq[2:].translate()
+                        for feature in genbank_seq.features:
+                            if 'locus_tag' in feature.qualifiers:
+                                protein_id = feature.qualifiers['locus_tag'][0]
+
+                    if 'translation' in CDS.qualifiers.keys():
+                        prot_seq = Seq(CDS.qualifiers['translation'][0])
+                        if direction == 1:
+                            direction_id = '+'
                         else:
-                            prot_seq = nt_seq.translate()
-                    if direction == -1:
-                        direction_id = '-'
-
-                        nt_seq = genbank_seq.seq
-
-                        if gene_start == 0:
-                            prot_seq = nt_seq.translate()
-                        else:
-                            if len(nt_seq) % 3 == 0:
-                                prot_seq = nt_seq.translate()
-                            elif len(nt_seq) % 3 == 1:
-                                prot_seq = nt_seq[:-1].translate()
+                            direction_id = '-'
+                    else:
+                        if direction == 1:
+                            direction_id = '+'
+                            # for protein sequence if it is at the start of the entry assume that end of sequence is in frame
+                            # if it is at the end of the genbank entry assume that the start of the sequence is in frame
+                            if gene_start == 0:
+                                if len(nt_seq) % 3 == 0:
+                                    prot_seq = nt_seq.translate()
+                                elif len(nt_seq) % 3 == 1:
+                                    prot_seq = nt_seq[1:].translate()
+                                else:
+                                    prot_seq = nt_seq[2:].translate()
                             else:
-                                prot_seq = nt_seq[:-2].reverse_complement().translate()
+                                prot_seq = nt_seq.translate()
+                        if direction == -1:
+                            direction_id = '-'
 
-                # Write protein file
-                if len(prot_seq) > 0:
-                    prot_entry = SeqRecord(prot_seq, id='%s|%i-%i|%s|%s|%s' % (species_id, offSet + gene_start + 1,
-                                                                               offSet + gene_end, direction_id,
-                                                                               internal_id, protein_id),
-                                           description='%s in %s' % (protein_id, species_id))
-                    with open(CDS_prot_outfile_name, 'a') as outfile_handle:
-                        SeqIO.write(prot_entry, outfile_handle, 'fasta')
-            entry_ctr += 1
+                            nt_seq = genbank_seq.seq
+
+                            if gene_start == 0:
+                                prot_seq = nt_seq.translate()
+                            else:
+                                if len(nt_seq) % 3 == 0:
+                                    prot_seq = nt_seq.translate()
+                                elif len(nt_seq) % 3 == 1:
+                                    prot_seq = nt_seq[:-1].translate()
+                                else:
+                                    prot_seq = nt_seq[:-2].reverse_complement().translate()
+
+                    # Write protein file
+                    if len(prot_seq) > 0:
+                        prot_entry = SeqRecord(prot_seq, id='%s|%i-%i|%s|%s|%s' % (species_id, gene_start + 1,
+                                                                                   gene_end, direction_id,
+                                                                                   internal_id, protein_id),
+                                               description='%s in %s' % (protein_id, species_id))
+                        with open(CDS_prot_outfile_name, 'a') as outfile_handle:
+                            SeqIO.write(prot_entry, outfile_handle, 'fasta')
+                entry_ctr += 1
+        except Exception as e:
+            signal.emit('Error Making Database on %s \n '
+                        'Error Message: %s' % (fileName,str(e)))
+            raise

@@ -11,7 +11,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_runSearch(object):
     def setupUi(self, runSearch):
         runSearch.setObjectName("runSearch")
-        runSearch.resize(367, 160)
+        runSearch.resize(342, 155)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
@@ -19,11 +19,9 @@ class Ui_runSearch(object):
         runSearch.setSizePolicy(sizePolicy)
         self.verticalLayout = QtWidgets.QVBoxLayout(runSearch)
         self.verticalLayout.setObjectName("verticalLayout")
-        self.title = QtWidgets.QLabel(runSearch)
-        self.title.setObjectName("title")
-        self.verticalLayout.addWidget(self.title)
         self.currentTask = QtWidgets.QLabel(runSearch)
         self.currentTask.setAlignment(QtCore.Qt.AlignCenter)
+        self.currentTask.setWordWrap(True)
         self.currentTask.setObjectName("currentTask")
         self.verticalLayout.addWidget(self.currentTask)
         self.horizontalLayout = QtWidgets.QHBoxLayout()
@@ -63,7 +61,6 @@ class Ui_runSearch(object):
     def retranslateUi(self, runSearch):
         _translate = QtCore.QCoreApplication.translate
         runSearch.setWindowTitle(_translate("runSearch", "Search Status"))
-        self.title.setText(_translate("runSearch", "Running Architecture Search:"))
         self.currentTask.setText(_translate("runSearch", "Running Checks"))
         self.percentCmpLabel.setText(_translate("runSearch", "1/6"))
         self.cancelBtn.setText(_translate("runSearch", "Cancel "))

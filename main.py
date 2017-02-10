@@ -21,7 +21,7 @@
     along with clusterTools.  If not, see <http://www.gnu.org/licenses/>.
 '''
 
-import os
+import os,csv
 from PyQt5.QtCore import (QFile, QFileInfo, QPoint, QRect, QSettings, QSize,QRegularExpression,
         Qt, QTextStream,QCoreApplication,QThread,pyqtSignal,pyqtSlot,QObject)
 from PyQt5 import QtGui
@@ -33,11 +33,7 @@ from collections import Counter
 from glob import iglob
 from itertools import chain
 
-# Handle back to sequence of gene {(filepath,geneName):sequence}
-
-
-import myGui_Beta,resultsWindow,status,parameters,sys # This file holds our MainWindow and all design related things
-              # it also keeps events etc that we defined in Qt Designer
+import myGui_Beta,resultsWindow,status,parameters,sys,createDbStatus
 
 class createDbWorker(QObject):
     start = pyqtSignal()
@@ -49,8 +45,12 @@ class createDbWorker(QObject):
         super(createDbWorker,self).__init__()
     @pyqtSlot()
     def run(self):
-        proccessGbks(self.taskList,self.dbPath,self.currentGbk)
-        self.finished.emit()
+        try:
+            proccessGbks(self.taskList,self.dbPath,self.currentGbk)
+            self.currentGbk.emit("Database Creation Successful!")
+            self.finished.emit()
+        except:
+            self.finished.emit()
 
 class runChecksWorker(QObject):
     checkError = pyqtSignal(str)
@@ -228,6 +228,11 @@ class statusWindow(QWidget,status.Ui_runSearch):
         super(self.__class__,self).__init__()
         self.setupUi(self)
 
+class createDbStatusWindow(QWidget,createDbStatus.Ui_createDbWin):
+    def __init__(self):
+        super(self.__class__,self).__init__()
+        self.setupUi(self)
+
 class paramsWindow(QWidget,parameters.Ui_parametersWin):
     def __init__(self):
         super(self.__class__,self).__init__()
@@ -244,16 +249,40 @@ class paramsWindow(QWidget,parameters.Ui_parametersWin):
         self.hmmDomLen.setValidator(posIntValidator)
         self.windowSize.setValidator(posIntValidator)
 
-class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
+class resultsWindow(QWidget,resultsWindow.Ui_Results):
     def __init__(self):
-        # Explaining super is out of the scope of this article
-        # So please google it if you're not familar with it
-        # Simple reason why we use it here is that it allows us to
-        # access variables, methods etc in the design.py file
+        super(self.__class__,self).__init__()
+        self.setupUi(self)
+
+class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
+    def __init__(self,makeblastdbExec,blastExec,hmmFetchExec,hmmSearchExec,verbose=False):
+
         super(self.__class__, self).__init__()
-        self.setupUi(self)  # This is defined in design.py file automatically
-                            # It sets up layout and widgets that are defined
-        ### Process Genbank Panel
+        self.setupUi(self)
+        ### Set Up Parameters and Shared Data Structures
+        self.nameToParamDict = {'blastEval': 1e-5, 'hmmEval': 1e-5, 'hmmScore': 30,
+                                'hmmDomLen': 15, 'windowSize': 50000}
+
+        self.geneDict = dict()
+        self.hmmDict = dict()
+        self.forBLAST = dict()
+        self.forHmmer = dict()
+        self.pathToDatabase = ''
+        self.outputDir  = ''
+
+        self.makeblastdbExec = makeblastdbExec
+        self.blastExec = blastExec
+        self.hmmFetchExec = hmmFetchExec
+        self.hmmSearchExec = hmmSearchExec
+        self.verbose = verbose
+
+        ### Set Up Workflow Variables
+
+        self.checkSuccessful = False
+        self.blastSuccessful = False
+        self.hmmerSuccessful = False
+
+        ### Set Up Button Connections
         self.genbankDirBtn.clicked.connect(self.loadGbkDir)
         self.addGenbankBtn.clicked.connect(self.addGbkFiles)
         self.deleteGenbankBtn.clicked.connect(self.removeGbkFiles)
@@ -282,9 +311,7 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
         self.dataBaseSelector.activated.connect(self.databaseFunction)
         self.outputDirectorySelector.currentIndexChanged.connect(self.outdirFunction)
         self.outputDirectorySelector.activated.connect(self.outdirFunction)
-        self.checkSuccessful = False
-        self.blastSuccessful = False
-        self.hmmerSuccessful = False
+
         ### Initialize settings for parameters window
         self.paramsWin = paramsWindow()
 
@@ -296,70 +323,7 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
         self.paramsWin.applyBtn.clicked.connect(self.updateParams)
         self.setParamsBtn.clicked.connect(self.showParamWindow)
 
-        self.nameToParamDict = {'blastEval':1e-5,'hmmEval':1e-5,'hmmScore':30,
-                                'hmmDomLen':15,'windowSize':50000}
-    ### Genbank Panel Functions
-    def loadGbkDir(self):
-        dirName = QFileDialog.getExistingDirectory()
-        if dirName and os.access(dirName, os.R_OK):
-            self.genbankDirPath.setText(dirName)
-        else:
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
-            msg.setText("Can't Read Files In Folder")
-            msg.setStandardButtons(QMessageBox.Ok)
-            msg.exec()
 
-    def addGbkFiles(self):
-        gbkPath = self.genbankDirPath.text()
-        if gbkPath:
-            gbkList = chain(iglob(gbkPath+'/*.gbk'),iglob(gbkPath+'/*.gb'))
-            for gbkFile in gbkList:
-                self.genbankList.addItem(gbkFile)
-            self.genbankDirPath.clear()
-
-    def removeGbkFiles(self):
-        gbksToRemove = self.genbankList.selectedItems()
-        for gbkFile in gbksToRemove:
-            self.genbankList.takeItem(self.genbankList.row(gbkFile))
-
-    def chooseDBoutDir(self):
-        dirName = QFileDialog.getExistingDirectory()
-        if dirName and os.access(dirName, os.W_OK):
-            self.dbOutputDir.setText(dirName)
-        else:
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
-            msg.setText("Can't Write to that Folder")
-            msg.setStandardButtons(QMessageBox.Ok)
-            msg.exec()
-
-    def createDB(self):
-        dbPath = self.dbOutputDir.text()
-        taskList = [genbankFile.text() for genbankFile in self.genbankList.items()]
-
-        if not dbPath:
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
-            msg.setText("No Output Directory Specified")
-            msg.setStandardButtons(QMessageBox.Ok)
-            msg.exec()
-        elif len(taskList) == 0:
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
-            msg.setText("No Genbank Files to Process")
-            msg.setStandardButtons(QMessageBox.Ok)
-            msg.exec()
-        else:
-            self.runnerThread = QThread()
-            self.runnerThread.start()
-
-            self.createDbWorker = createDbWorker(taskList,dbPath)
-            self.createDbWorker.moveToThread(self.runnerThread)
-            self.createDbWorker.start.connect(self.createDbWorker.run)
-            self.createDbWorker.start.emit()
-
-            self.createDbWorker.finished.connect(self.createDbSuccessful)
 
     ### Utility Functions
     def updateParams(self):
@@ -398,6 +362,79 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
 
     def updateCheckSuccessful(self,flag):
         self.checkSuccessful = flag
+
+    ### Genbank Panel Functions
+    def loadGbkDir(self):
+        dirName = QFileDialog.getExistingDirectory()
+        if dirName and os.access(dirName, os.R_OK):
+            self.genbankDirPath.setText(dirName)
+        else:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Can't Read Files In Folder")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+    def addGbkFiles(self):
+        gbkPath = self.genbankDirPath.text()
+        if gbkPath:
+            gbkList = chain(iglob(gbkPath+'/*.gbk'),iglob(gbkPath+'/*.gb'))
+            for gbkFile in gbkList:
+                self.genbankList.addItem(gbkFile)
+            self.totalFiles.setText(str(self.genbankList.count()))
+            self.genbankDirPath.clear()
+    def removeGbkFiles(self):
+        gbksToRemove = self.genbankList.selectedItems()
+        for gbkFile in gbksToRemove:
+            self.genbankList.takeItem(self.genbankList.row(gbkFile))
+        self.totalFiles.setText(str(self.genbankList.count()))
+    def chooseDBoutDir(self):
+        dirName = QFileDialog.getExistingDirectory()
+        if dirName and os.access(dirName, os.W_OK):
+            self.dbOutputDir.setText(dirName)
+        else:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Can't Write to that Folder")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+    def createDB(self):
+        dbPath = self.dbOutputDir.text()
+        taskList = [genbankFile.text() for genbankFile in (self.genbankList.item(x) for x in range(self.genbankList.count()))]
+
+        if not dbPath:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("No Output Directory Specified")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+        elif len(taskList) == 0:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("No Genbank Files to Process")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+        else:
+            self.runnerThread = QThread()
+            self.runnerThread.start()
+            self.createDbWorker = createDbWorker(taskList,dbPath)
+            self.createDbStatusWin = createDbStatusWindow()
+            self.createDbStatusWin.doneBtn.clicked.connect(self.createDbStatusWin.close)
+            self.createDbStatusWin.cancelBtn.clicked.connect(lambda: self.abortSearch(self.createDbStatusWin,self.runnerThread))
+            self.createDbStatusWin.progressBar.setMaximum(int(self.totalFiles.text()))
+            self.createDbWorker.moveToThread(self.runnerThread)
+            self.createDbWorker.start.connect(self.createDbWorker.run)
+            self.createDbWorker.currentGbk.connect(self.updateCurrentGbk)
+            self.createDbWorker.finished.connect(self.createDbSuccessful)
+            self.createDbWorker.start.emit()
+            self.createDbStatusWin.show()
+    def updateCurrentGbk(self,currentGbk):
+        self.createDbStatusWin.currentTask.setText(currentGbk)
+        self.createDbStatusWin.progressBar.setValue(self.createDbStatusWin.progressBar.value()+1)
+        self.createDbStatusWin.percentLabel.setText(str("%.0f%%" % (100*self.createDbStatusWin.progressBar.value()
+                                                                    /int(self.totalFiles.text()))))
+    def createDbSuccessful(self):
+        self.genbankList.clear()
+        self.createDbStatusWin.doneBtn.setEnabled(True)
     ### Status Window Methods
     def updateStatusWinText(self,statusWin,currentTaskText,percentCmpLabelText,percentCmpBarValue):
         statusWin.currentTask.setText(currentTaskText)
@@ -406,6 +443,63 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
     def abortSearch(self,statusWin,currentThread):
         statusWin.close()
         currentThread.terminate()
+    ### Results Window Methods
+    def showResultsWindow(self,blastList,hmmList,filteredClusters):
+        self.statusWin.close()
+        self.checkSuccessful = False
+        self.resultsWin = resultsWindow()
+
+        self.resultsWin.resultsList.setColumnCount(4 + len(blastList) + len(hmmList))
+        self.resultsWin.resultsList.setHorizontalHeaderItem(0, QTableWidgetItem("Species/Accession ID"))
+        self.resultsWin.resultsList.setHorizontalHeaderItem(1, QTableWidgetItem("Start"))
+        self.resultsWin.resultsList.setHorizontalHeaderItem(2, QTableWidgetItem("End"))
+        self.resultsWin.resultsList.setHorizontalHeaderItem(3, QTableWidgetItem("Size"))
+        for idx, blastHit in enumerate(blastList):
+            if self.verbose:
+                print(idx, blastHit)
+            self.resultsWin.resultsList.setHorizontalHeaderItem(idx + 4, QTableWidgetItem(blastHit))
+        for idx, hmmHit in enumerate(hmmList):
+            if self.verbose: print(idx,' and '.join(hmmHit))
+            self.resultsWin.resultsList.setHorizontalHeaderItem(idx + len(blastList) + 4,
+                                                          QTableWidgetItem(' and '.join(hmmHit)))
+        for cluster, hitDict in filteredClusters.items():
+            currentRowCount = self.resultsWin.resultsList.rowCount()
+            self.resultsWin.resultsList.insertRow(currentRowCount)
+            self.resultsWin.resultsList.setItem(currentRowCount, 0, QTableWidgetItem(cluster[0]))
+            self.resultsWin.resultsList.setItem(currentRowCount, 1, QTableWidgetItem(str(cluster[1])))
+            self.resultsWin.resultsList.setItem(currentRowCount, 2, QTableWidgetItem(str(cluster[2])))
+            self.resultsWin.resultsList.setItem(currentRowCount, 3, QTableWidgetItem(str(cluster[2]-cluster[1]+1)))
+            for idx, blastHit in enumerate(blastList):
+                self.resultsWin.resultsList.setItem(currentRowCount, idx + 4,
+                                              QTableWidgetItem('; '.join(filteredClusters[cluster].get(blastHit,''))))
+            for idx, hmmHit in enumerate(hmmList):
+                self.resultsWin.resultsList.setItem(currentRowCount, idx + len(blastList) + 4,
+                                              QTableWidgetItem('; '.join(filteredClusters[cluster].get(hmmHit,''))))
+
+        self.resultsWin.resultsList.resizeColumnsToContents()
+        self.resultsWin.exportResults.clicked.connect(self.exportResults)
+        self.resultsWin.show()
+    def exportResults(self):
+        totalFilePath, _ = QFileDialog.getSaveFileName(caption="Export Search Results",filter='*.csv')
+        if totalFilePath:
+            path,fileName = os.path.split(totalFilePath)
+            if os.access(path, os.W_OK):
+                with open(totalFilePath, 'w') as stream:
+                    writer = csv.writer(stream)
+                    rowData = [self.resultsWin.resultsList.horizontalHeaderItem(idx).text()
+                               for idx in range(self.resultsWin.resultsList.columnCount())]
+                    writer.writerow(rowData)
+                    for rowIdx in range(self.resultsWin.resultsList.rowCount()):
+                        rowData = [self.resultsWin.resultsList.item(rowIdx, colIdx).text()
+                                   for colIdx in range(self.resultsWin.resultsList.columnCount())]
+                        writer.writerow(rowData)
+            else:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setText("Can't Write to Directory")
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec()
+
     ### Run Permissions Checks
     def runChecks(self):
         if self.searchList.rowCount() >= 1:
@@ -417,7 +511,7 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
                 self.blastSuccessful = False
                 self.hmmerSuccessful = False
 
-                self.checksWorker = runChecksWorker(outputDir,pathToDatabase)
+                self.checksWorker = runChecksWorker(self.outputDir,self.pathToDatabase)
                 self.checksWorker.checkError.connect(lambda x: self.doneCheck(x,self.statusWin))
                 self.statusWin = statusWindow()
                 self.statusWin.percentCmpBar.setMaximum(6)
@@ -493,14 +587,13 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
             return
     ### Run BLAST Methods
     def runBlast(self):
-        global forBLAST, outputDir, pathToDatabase, makeblastdbExec, blastExec
         self.updateStatusWinText(self.statusWin, 'Running BLAST Search: Generating Input Fasta', '2/6',
                                  self.statusWin.percentCmpBar.value() + 1)
         if self.checkSuccessful:
             if not self.blastSuccessful:
-                if forBLAST:
-                    self.blastWorker = runBlastWorker(forBLAST, outputDir, pathToDatabase,
-                                                      makeblastdbExec, blastExec,self.nameToParamDict['blastEval'])
+                if self.forBLAST:
+                    self.blastWorker = runBlastWorker(self.forBLAST, self.outputDir, self.pathToDatabase,
+                                                      self.makeblastdbExec, self.blastExec,self.nameToParamDict['blastEval'])
                     # self.currentThread = self.blastThread
                     self.blastWorker.inputGenerated.connect(lambda x: self.generateFasta(x, self.statusWin))
                     self.blastWorker.makeDB.connect(lambda x: self.checkDB(x, self.statusWin))
@@ -586,17 +679,16 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
             return
     ### Run Hmmer Methods
     def runHmmer(self):
-        global forHmmer, hmmFetchExec, hmmSearchExec, hmmDict, outputDir,pathToDatabase
         if self.checkSuccessful:
             self.updateStatusWinText(self.statusWin, 'Running HMMSearch: Extracting HMMs to make reference file',
                                      '3/6', self.statusWin.percentCmpBar.value() + 1)
-
             if not self.hmmerSuccessful:
                 hmmSet = set()
-                hmmSet.update(*forHmmer.keys())
+                hmmSet.update(*self.forHmmer.keys())
                 if hmmSet:
-                    self.hmmerWorker = runHmmerWorker(hmmFetchExec, hmmSearchExec,
-                                                      hmmDict, hmmSet, outputDir,pathToDatabase,self.nameToParamDict['hmmEval'])
+                    self.hmmerWorker = runHmmerWorker(self.hmmFetchExec, self.hmmSearchExec,
+                                                      self.hmmDict, hmmSet, self.outputDir,self.pathToDatabase,
+                                                      self.nameToParamDict['hmmEval'])
                     self.hmmerWorker.hmmDBbuilt.connect(lambda x, y: self.hmmDBbuiltCheck(x, y, self.statusWin))
                     self.hmmerWorker.hmmSearchComplete.connect(lambda x: self.hmmSuccessCheck(x, self.statusWin))
                     if not self.runnerThread:
@@ -649,15 +741,13 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
             self.runnerThread.terminate()
     ### Process Filtered Clusters
     def processResults(self):
-        global outputDir,verbose
         self.updateStatusWinText(self.statusWin, 'Parsing Output Files: Creating Search Lists', '4/6', 4)
-
         if self.checkSuccessful and self.blastSuccessful and self.hmmerSuccessful:
             blastList = []
             hmmList = []
 
-            blastOutFile = outputDir + "/blast_results.out"
-            hmmOutFile = outputDir + '/hmmSearch.out'
+            blastOutFile = self.outputDir + "/blast_results.out"
+            hmmOutFile = self.outputDir + '/hmmSearch.out'
 
             for idx in range(self.searchList.rowCount()):
                 if self.searchList.item(idx, 0).text() == 'HMMER Hits':
@@ -699,7 +789,7 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
                     passBLASTcheck = True
                 if hmmList:
                     try:
-                        assert os.path.isfile(outputDir + '/hmmSearch.out'), "HMMer Hits included in search but no " \
+                        assert os.path.isfile(hmmOutFile), "HMMer Hits included in search but no " \
                                                                              "HMMer output file found"
                         passHMMcheck = True
                     except AssertionError:
@@ -733,41 +823,6 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
                 self.processSearchListWorker.moveToThread(self.runnerThread)
                 self.processSearchListWorker.start.connect(self.processSearchListWorker.run)
                 self.processSearchListWorker.start.emit()
-    @pyqtSlot()
-    def showResultsWindow(self,blastList,hmmList,filteredClusters):
-        self.statusWin.close()
-        self.checkSuccessful = False
-        self.resultsWin = QWidget()
-        resultsUi = resultsWindow.Ui_Results()
-        resultsUi.setupUi(self.resultsWin)
-        resultsUi.resultsList.setColumnCount(3 + len(blastList) + len(hmmList))
-        resultsUi.resultsList.setHorizontalHeaderItem(0, QTableWidgetItem("Species/Accession ID"))
-        resultsUi.resultsList.setHorizontalHeaderItem(1, QTableWidgetItem("Start"))
-        resultsUi.resultsList.setHorizontalHeaderItem(2, QTableWidgetItem("End"))
-        for idx, blastHit in enumerate(blastList):
-            resultsUi.resultsList.setHorizontalHeaderItem(idx + 3, QTableWidgetItem(blastHit))
-        for idx, hmmHit in enumerate(hmmList):
-            resultsUi.resultsList.setHorizontalHeaderItem(idx + len(blastList) + 3,
-                                                          QTableWidgetItem(' and '.join(hmmHit)))
-        for cluster, hitDict in filteredClusters.items():
-            currentRowCount = resultsUi.resultsList.rowCount()
-            resultsUi.resultsList.insertRow(currentRowCount)
-            resultsUi.resultsList.setItem(currentRowCount, 0, QTableWidgetItem(cluster[0]))
-            resultsUi.resultsList.setItem(currentRowCount, 1, QTableWidgetItem(str(cluster[1])))
-            resultsUi.resultsList.setItem(currentRowCount, 2, QTableWidgetItem(str(cluster[2])))
-
-            for idx, blastHit in enumerate(blastList):
-                resultsUi.resultsList.setItem(currentRowCount, idx + 3,
-                                              QTableWidgetItem('; '.join(filteredClusters[cluster][blastHit])))
-            for idx, hmmHit in enumerate(hmmList):
-                resultsUi.resultsList.setItem(currentRowCount, idx + len(blastList) + 3,
-                                              QTableWidgetItem('; '.join(filteredClusters[cluster][hmmHit])))
-
-        resultsUi.resultsList.resizeColumnsToContents()
-        resultsUi.resultsList.update()
-
-        self.resultsWin.updateGeometry()
-        self.resultsWin.show()
     @pyqtSlot(dict)
     def generateResults(self,filteredClusters,statusWin,blastList,hmmList):
         if filteredClusters:
@@ -781,14 +836,12 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
             self.checkSuccessful = False
             return
     def removeSearchTerm(self):
-        global forHmmer,forBLAST,hmmDict,geneDict,verbose
-
         itemType =  self.searchList.item(self.searchList.currentRow(),0).text()
         termToRemove = self.searchList.item(self.searchList.currentRow(),1).text()
-
         if itemType == 'GENE':
-            if verbose: print("Deleted %s" % termToRemove)
-            del forBLAST[termToRemove]
+            if self.verbose:
+                print("Deleted %s" % termToRemove)
+            del self.forBLAST[termToRemove]
             self.searchList.removeRow(self.searchList.currentRow())
         elif itemType == 'HMMER Hits':
             hmmKey = tuple(sorted(termToRemove.split(' and ')))
@@ -797,42 +850,38 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
                 if self.searchList.item(idx,0).text() == 'HMMER Hits':
                     hmmerSearchTerms[tuple(sorted(self.searchList.item(idx,1).text().split(' and ')))] += 1
             if hmmerSearchTerms[hmmKey] <= 1:
-                del forHmmer[hmmKey]
-            if verbose: print(forHmmer)
+                del self.forHmmer[hmmKey]
+            if self.verbose: print(self.forHmmer)
             self.searchList.removeRow(self.searchList.currentRow())
     def outdirFunction(self):
-        global outputDir,verbose
         if 'Select Directory...' in self.outputDirectorySelector.currentText():
             dirName = QFileDialog.getExistingDirectory(self)
             if dirName:
                 self.outputDirectorySelector.addItem(dirName)
                 self.outputDirectorySelector.setCurrentIndex(self.outputDirectorySelector.count()-1)
         if 'Select Directory...' not in self.outputDirectorySelector.currentText():
-            outputDir = self.outputDirectorySelector.currentText()
-            if verbose: print(outputDir)
+            self.outputDir = self.outputDirectorySelector.currentText()
+            if self.verbose: print(self.outputDir)
     def databaseFunction(self):
-        global pathToDatabase,verbose
         if 'add database...' in self.dataBaseSelector.currentText():
             fileName, _ = QFileDialog.getOpenFileName(self)
             if fileName:
                 self.dataBaseSelector.addItem(fileName)
                 self.dataBaseSelector.setCurrentIndex(self.dataBaseSelector.count()-1)
         if 'add database...' not in self.dataBaseSelector.currentText():
-            pathToDatabase = self.dataBaseSelector.currentText()
-            if verbose: print(pathToDatabase)
+            self.pathToDatabase = self.dataBaseSelector.currentText()
+            if self.verbose: print(self.pathToDatabase)
     def openGene(self):
-        global verbose
         fileName, _ = QFileDialog.getOpenFileName(self)
-        if verbose: print(fileName)
+        if self.verbose: print(fileName)
         if fileName:
             self.GeneFilePath.setText(fileName)
     def loadGeneFile(self):
-        global geneDict
         if self.GeneFilePath.text():
             valid_extensions = set(['gbk','fa','fasta'])
             extension = self.GeneFilePath.text().split('.')[-1]
             if extension in valid_extensions:
-                genesToAdd,geneDict = parseSeqFile(self.GeneFilePath.text(),geneDict)
+                genesToAdd,self.geneDict = parseSeqFile(self.GeneFilePath.text(),self.geneDict)
                 for gene in genesToAdd:
                     self.geneList.addItem(gene)
                 self.clearGeneFilePath()
@@ -844,43 +893,39 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
                 msg.buttonClicked.connect(self.clearGeneFilePath)
                 msg.exec()
     def openHmm(self):
-        global verbose
         fileName, _ = QFileDialog.getOpenFileName(self)
-        if verbose: print(fileName)
+        if self.verbose: print(fileName)
         if fileName:
             self.hmmFilePath.setText(fileName)
     def loadHMMFile(self):
-        global hmmDict
         if self.hmmFilePath.text():
-            hmmsToAdd,hmmDict = parseHMMfile(self.hmmFilePath.text(),hmmDict)
+            hmmsToAdd,self.hmmDict = parseHMMfile(self.hmmFilePath.text(),self.hmmDict)
             for hmm in hmmsToAdd:
                 self.hmmList.addItem(hmm)
             self.clearHmmFilePath()
     def loadGene(self):
-        global forBLAST,geneDict,verbose
         genesToAdd = self.geneList.selectedItems()
         for gene in genesToAdd:
-            if verbose: (gene.text())
-            if gene.text() not in forBLAST.keys():
+            if self.verbose: (gene.text())
+            if gene.text() not in self.forBLAST.keys():
                 currentRowCount = self.searchList.rowCount()
                 self.searchList.insertRow(currentRowCount)
                 self.searchList.setItem(currentRowCount,0,QTableWidgetItem('GENE'))
                 self.searchList.setItem(currentRowCount,1,QTableWidgetItem(gene.text()))
                 self.searchList.resizeColumnsToContents()
-                forBLAST[gene.text()] = geneDict[gene.text()]
+                self.forBLAST[gene.text()] = self.geneDict[gene.text()]
     def loadHMM(self):
         # hmmDict -> {(hmmset):set(paths to hmms)}
-        global hmmDict,forHmmer,verbose
         hmmsToAdd = tuple(sorted(hmmObject.text() for hmmObject in self.hmmList.selectedItems()))
         if hmmsToAdd:
-            forHmmer[hmmsToAdd] = set(hmmDict[hmm] for hmm in hmmsToAdd)
+            self.forHmmer[hmmsToAdd] = set(self.hmmDict[hmm] for hmm in hmmsToAdd)
             currentRowCount = self.searchList.rowCount()
             self.searchList.insertRow(currentRowCount)
             self.searchList.setItem(currentRowCount, 0, QTableWidgetItem('HMMER Hits'))
             self.searchList.setItem(currentRowCount, 1, QTableWidgetItem(' and '.join(hmmsToAdd)))
             self.searchList.resizeColumnsToContents()
-            if verbose:
-                print(forHmmer)
+            if self.verbose:
+                print(self.forHmmer)
             self.hmmList.clearSelection()
         else:
             msg = QMessageBox()
@@ -893,36 +938,21 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
     def clearHmmFilePath(self):
         self.hmmFilePath.setText('')
     def clearGene(self):
-        global geneDict
         self.geneList.clear()
-        geneDict = dict()
+        self.geneDict = dict()
     def clearHMM(self):
-        global hmmDict
         self.hmmList.clear()
-        hmmDict = dict()
+        self.hmmDict = dict()
 
 def main():
-
-    global geneDict,hmmDict,forBLAST,forHmmer,pathToDatabase,blastExecutable,hmmerExecutable,verbose\
-        ,outputDir,hmmFetchExec,makeblastdbExec,hmmSearchExec,blastExec
-
-    verbose = True
-
-    geneDict = dict()
-    hmmDict = dict()
-    forBLAST = dict()
-    forHmmer = dict()
 
     hmmFetchExec = 'hmmfetch'
     makeblastdbExec = 'makeblastdb'
     blastExec = 'blastp'
     hmmSearchExec = 'hmmsearch'
 
-    pathToDatabase = ''
-    outputDir = ''
-
     app = QApplication(sys.argv)
-    form = mainApp()
+    form = mainApp(makeblastdbExec,blastExec,hmmFetchExec,hmmSearchExec,verbose=True)
     form.show()
     app.exec_()
 

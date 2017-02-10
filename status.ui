@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>367</width>
-    <height>160</height>
+    <width>342</width>
+    <height>155</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -21,19 +21,15 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
-    <widget class="QLabel" name="title">
-     <property name="text">
-      <string>Running Architecture Search:</string>
-     </property>
-    </widget>
-   </item>
-   <item>
     <widget class="QLabel" name="currentTask">
      <property name="text">
       <string>Running Checks</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignCenter</set>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
      </property>
     </widget>
    </item>
