@@ -26,7 +26,29 @@ from Bio.Seq import Seq
 from Bio.Alphabet import generic_protein
 from clusterTools import clusterAnalysis
 from random import random
-import sys,subprocess,os
+import sys,subprocess,os,platform
+### To fix the file paths in windows ###
+# from http://stackoverflow.com/questions/23598289/how-to-get-windows-short-file-name-in-python
+import ctypes
+from ctypes import wintypes
+_GetShortPathNameW = ctypes.windll.kernel32.GetShortPathNameW
+_GetShortPathNameW.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD]
+_GetShortPathNameW.restype = wintypes.DWORD
+
+def get_short_path_name(long_name):
+    """
+    Gets the short path name of a given long path.
+    http://stackoverflow.com/a/23598461/200291
+    """
+    output_buf_size = 0
+    while True:
+        output_buf = ctypes.create_unicode_buffer(output_buf_size)
+        needed = _GetShortPathNameW(long_name, output_buf, output_buf_size)
+        if output_buf_size >= needed:
+            return output_buf.value
+        else:
+            output_buf_size = needed
+###########################################
 
 def execute(commands, input=None):
     "Execute commands in a system-independent manner"
@@ -100,6 +122,9 @@ def parseHMMfile(HMMfilePath,HMMdict):
     return hmmsToAdd,HMMdict
 
 def MakeBlastDB(makeblastdbExec,dbPath,outputDir,outDBName):
+    if platform.system() == 'Windows':
+        dbPath = get_short_path_name(dbPath)
+        outputDir = get_short_path_name(outputDir)
     command = [makeblastdbExec, "-in", dbPath, "-dbtype", "prot","-out",os.path.join(outputDir,outDBName)]
     out, err, retcode = execute(command)
     if retcode != 0:
@@ -107,15 +132,25 @@ def MakeBlastDB(makeblastdbExec,dbPath,outputDir,outDBName):
     return out,err,retcode
 
 def runBLAST(blastExec,inputFastas,outputDir,dbPath,eValue='1E-05'):
+    if platform.system() == 'Windows':
+        path, outputDBname = os.path.split(dbPath)
+        dbPath = os.path.join(get_short_path_name(path),outputDBname)
+        inputFastas = get_short_path_name(inputFastas)
+        outputDir = get_short_path_name(outputDir)
+        print(dbPath)
     command = [blastExec, "-db", dbPath, "-query", inputFastas, "-outfmt", "6", "-max_target_seqs", "10000", "-evalue",
-               eValue, "-out", outputDir + "/blast_results.out"]
+               eValue, "-out", os.path.join(outputDir,"blast_results.out")]
     out, err, retcode = execute(command)
     if retcode != 0:
         print('BLAST failed with retcode %d: %r' % (retcode, err))
     return out,err,retcode
 
 def runHmmsearch(hmmSearchExec,hmmDBase,outputDir,dbPath,eValue='1E-05'):
-    command = [hmmSearchExec,'--domtblout', outputDir+'/hmmSearch.out', '--noali',
+    if platform.system() == 'Windows':
+        hmmDBase = get_short_path_name(hmmDBase)
+        outputDir = get_short_path_name(outputDir)
+        dbPath = get_short_path_name(dbPath)
+    command = [hmmSearchExec,'--domtblout', os.path.join(outputDir,'hmmSearch.out'), '--noali',
                '-E', eValue, hmmDBase, dbPath]
     out, err, retcode = execute(command)
     if retcode != 0:
@@ -123,7 +158,7 @@ def runHmmsearch(hmmSearchExec,hmmDBase,outputDir,dbPath,eValue='1E-05'):
     return out,err,retcode
 
 def generateInputFasta(forBLAST,outputDir):
-    with open('%s/gene_queries.fa' % outputDir,'w') as outfile:
+    with open(os.path.join('%s' % outputDir,'gene_queries.fa'),'w') as outfile:
         for gene in forBLAST.keys():
             prot_entry = SeqRecord(Seq(forBLAST[gene],generic_protein), id=gene,
                                description='%s' % (gene))
@@ -132,7 +167,7 @@ def generateInputFasta(forBLAST,outputDir):
 def generateHMMdb(hmmFetchExec,hmmDict,hmmSet,outputDir):
     errFlag = False
     failedToFetch = set()
-    with open('%s/hmmDB.hmm' % outputDir,'wb') as outfile:
+    with open(os.path.join('%s' % outputDir,'hmmDB.hmm'),'wb') as outfile:
         for hmm in hmmSet:
             out, err, retcode = execute([hmmFetchExec, hmmDict[hmm], hmm])
             if retcode == 0:

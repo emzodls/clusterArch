@@ -416,6 +416,8 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
         else:
             self.runnerThread = QThread()
             self.runnerThread.start()
+            if self.verbose:
+                print(taskList)
             self.createDbWorker = createDbWorker(taskList,dbPath)
             self.createDbStatusWin = createDbStatusWindow()
             self.createDbStatusWin.doneBtn.clicked.connect(self.createDbStatusWin.close)
@@ -435,6 +437,7 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
     def createDbSuccessful(self):
         self.genbankList.clear()
         self.createDbStatusWin.doneBtn.setEnabled(True)
+        self.runnerThread.terminate()
     ### Status Window Methods
     def updateStatusWinText(self,statusWin,currentTaskText,percentCmpLabelText,percentCmpBarValue):
         statusWin.currentTask.setText(currentTaskText)
@@ -830,10 +833,12 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
                                      '6/6', 6)
             statusWin.viewResultsBtn.setEnabled(True)
             statusWin.viewResultsBtn.clicked.connect(lambda: self.showResultsWindow(blastList,hmmList,filteredClusters))
+            self.runnerThread.terminate()
         else:
             self.updateStatusWinText(statusWin, 'Search Complete: No Results Found',
                                      '6/6', 6)
             self.checkSuccessful = False
+            self.runnerThread.terminate()
             return
     def removeSearchTerm(self):
         itemType =  self.searchList.item(self.searchList.currentRow(),0).text()
