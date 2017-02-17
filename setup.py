@@ -10,6 +10,8 @@ base = None
 if sys.platform == "win32":
     base = "Win32GUI"
     includefiles = glob('winDeps/*')
+if sys.platform == "darwin":
+    includefiles = glob('macDeps/*')
 
 # Dependencies are automatically detected, but it might need fine tuning.
 build_exe_options = {"packages": [], "excludes": ["tkinter"],'include_files':includefiles}
