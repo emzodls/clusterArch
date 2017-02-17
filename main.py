@@ -366,7 +366,7 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
     ### Genbank Panel Functions
     def loadGbkDir(self):
         if sys.platform == 'win32':
-            dirName = QFileDialog.getExistingDirectory(options=QFileDialog.DontUseNativeDialog)
+            dirName = QFileDialog.getExistingDirectory(ptions=QFileDialog.DontUseNativeDialog)
         else:
             dirName = QFileDialog.getExistingDirectory()
         if dirName and os.access(dirName, os.R_OK):
@@ -600,7 +600,7 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
                 if self.forBLAST:
                     self.blastWorker = runBlastWorker(self.forBLAST, self.outputDir, self.pathToDatabase,
                                                       self.makeblastdbExec, self.blastExec,self.nameToParamDict['blastEval'])
-                    # self.currentThread = self.blastThread
+
                     self.blastWorker.inputGenerated.connect(lambda x: self.generateFasta(x, self.statusWin))
                     self.blastWorker.makeDB.connect(lambda x: self.checkDB(x, self.statusWin))
                     self.blastWorker.dbCreated.connect(lambda x: self.makeBlastDB(x, self.statusWin))
