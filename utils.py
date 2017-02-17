@@ -100,8 +100,9 @@ def parseSeqFile(SeqFilePath,geneDict):
                 existingGenes = geneDict.keys()
                 if protein_id in existingGenes:
                     protein_id = protein_id + '_' + internal_id
-                genesToAdd.append(protein_id)
-                geneDict[protein_id] = str(genbank_seq)
+                if protein_id not in existingGenes:
+                    genesToAdd.append(protein_id)
+                    geneDict[protein_id] = str(genbank_seq)
 
     # fasta
     elif extension == 'fasta' or extension == 'fa':
@@ -109,11 +110,12 @@ def parseSeqFile(SeqFilePath,geneDict):
         for gene in genes:
             existingGenes = geneDict.keys()
             if gene.id in existingGenes:
-                geneName = gene.id + '_' + SeqFilePath.split(extension)[-1].split('/')[-1]
+                geneName = gene.id + '.' + SeqFilePath.split(extension)[0].split('/')[-1]
             else:
                 geneName = gene.id
-            genesToAdd.append(geneName)
-            geneDict[geneName] = str(gene.seq)
+            if geneName not in existingGenes:
+                genesToAdd.append(geneName)
+                geneDict[geneName] = str(gene.seq)
     return genesToAdd,geneDict
 
 def parseHMMfile(HMMfilePath,HMMdict):
@@ -178,6 +180,52 @@ def generateHMMdb(hmmFetchExec,hmmDict,hmmSet,outputDir):
                 errFlag = True
                 failedToFetch.add(hmm)
     return errFlag,failedToFetch
+
+def processSearchListOptionalHits(requiredBlastList,requiredHmmList,blastOutFile,hmmOutFile,hmmScore, hmmDomLen,windowSize,
+                                  totalHitsRequired,additionalBlastList=[],additionalHmmList=[]):
+    # Gather all of the proteins, might be a memory issue...code memory friendly version with sequential filters (?)
+    prots = dict()
+    if requiredBlastList:
+        prots = clusterAnalysis.parseBLAST(blastOutFile,prots,swapQuery=True)
+    if requiredHmmList:
+        prots = clusterAnalysis.parse_hmmsearch_domtbl_anot(hmmOutFile,hmmDomLen,'hmm',prots,cutoff_score=hmmScore)
+
+    requiredBlastHitDict = dict()
+    requiredHmmHitDict = dict()
+
+    additionalBlastHitDict = dict()
+    additionalHmmHitDict = dict()
+
+    if requiredBlastList:
+        requiredBlastHitDict = {hitName:set(protein for protein in prots.values() if hitName in protein.hit_dict['blast'].hits)
+                  for hitName in requiredBlastList}
+    if requiredHmmList:
+        requiredHmmHitDict = {hmms: set(protein for protein in prots.values() if len(set(hmms) & protein.getAnnotations('hmm')) == len(hmms))
+               for hmms in requiredHmmList}
+    if additionalBlastList:
+        additionalBlastHitDict = {hitName:set(protein for protein in prots.values() if hitName in protein.hit_dict['blast'].hits)
+                  for hitName in additionalBlastList}
+    if additionalHmmList:
+        additionalHmmHitDict = {hmms: set(protein for protein in prots.values() if len(set(hmms) & protein.getAnnotations('hmm')) == len(hmms))
+               for hmms in additionalHmmList}
+
+    requiredHitDict = {**requiredBlastHitDict,**requiredHmmHitDict}
+    additionalHitDict = {**additionalBlastHitDict, **additionalHmmHitDict}
+    hitDict = {**requiredHitDict, **additionalHitDict}
+
+    putativeClusters = clusterAnalysis.cluster_proteins(prots.values(),windowSize)
+    assert totalHitsRequired >= len(requiredHitDict)
+    numExtraHitsNeeded = totalHitsRequired - len(requiredHitDict)
+
+    filteredClusters = dict()
+    for species,clusters in putativeClusters.items():
+        for cluster in clusters:
+            clusterProts = set(protein for protein in cluster)
+            if (sum(1 for hitSet in requiredHitDict.values() if len(clusterProts & hitSet) >= 1) == len(requiredHitDict.keys())) \
+                    and (sum(1 for hitSet in additionalHitDict.values() if len(clusterProts & hitSet) >= 1) >= numExtraHitsNeeded):
+                filteredClusters[(species,cluster.location[0],cluster.location[1])] = \
+                {hitQuery:[protein.name for protein in (hitSet & clusterProts)] for hitQuery,hitSet in hitDict.items()}
+    return filteredClusters
 
 def processSearchList(blastList,hmmList,blastOutFile,hmmOutFile,hmmScore, hmmDomLen,windowSize):
     # Gather all of the proteins, might be a memory issue...code memory friendly version with sequential filters (?)

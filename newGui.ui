@@ -6,9 +6,15 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>803</width>
-    <height>492</height>
+    <width>810</width>
+    <height>531</height>
    </rect>
+  </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
   </property>
   <property name="windowTitle">
    <string>clusterArch</string>
@@ -27,7 +33,7 @@
     <item>
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
-       <number>0</number>
+       <number>1</number>
       </property>
       <widget class="QWidget" name="prepareDatabase">
        <property name="sizePolicy">
@@ -201,13 +207,6 @@
         <string>Run Search</string>
        </attribute>
        <layout class="QGridLayout" name="gridLayout">
-        <item row="2" column="5">
-         <widget class="QLabel" name="databaseLabel">
-          <property name="text">
-           <string>Database to Query:</string>
-          </property>
-         </widget>
-        </item>
         <item row="23" column="0">
          <widget class="QPushButton" name="addHMMbtn">
           <property name="text">
@@ -215,113 +214,10 @@
           </property>
          </widget>
         </item>
-        <item row="17" column="0">
-         <widget class="QPushButton" name="addHMMfilePathBtn">
+        <item row="2" column="5">
+         <widget class="QLabel" name="databaseLabel">
           <property name="text">
-           <string>HMM File Path</string>
-          </property>
-         </widget>
-        </item>
-        <item row="3" column="1">
-         <widget class="QPushButton" name="addGenefileBtn">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="text">
-           <string>Process Gene File</string>
-          </property>
-         </widget>
-        </item>
-        <item row="23" column="1">
-         <widget class="QPushButton" name="clearHMMbtn">
-          <property name="text">
-           <string>clear</string>
-          </property>
-         </widget>
-        </item>
-        <item row="11" column="0">
-         <widget class="QPushButton" name="addGeneBtn">
-          <property name="text">
-           <string>add Gene</string>
-          </property>
-         </widget>
-        </item>
-        <item row="10" column="0" colspan="2">
-         <widget class="QListWidget" name="geneList">
-          <property name="selectionMode">
-           <enum>QAbstractItemView::SingleSelection</enum>
-          </property>
-         </widget>
-        </item>
-        <item row="10" column="5" rowspan="2">
-         <layout class="QVBoxLayout" name="verticalLayout_3">
-          <item>
-           <widget class="QTableWidget" name="searchList">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="sizeAdjustPolicy">
-             <enum>QAbstractScrollArea::AdjustToContents</enum>
-            </property>
-            <property name="editTriggers">
-             <set>QAbstractItemView::NoEditTriggers</set>
-            </property>
-            <property name="selectionMode">
-             <enum>QAbstractItemView::SingleSelection</enum>
-            </property>
-            <property name="columnCount">
-             <number>2</number>
-            </property>
-            <attribute name="horizontalHeaderCascadingSectionResizes">
-             <bool>true</bool>
-            </attribute>
-            <attribute name="horizontalHeaderStretchLastSection">
-             <bool>true</bool>
-            </attribute>
-            <column>
-             <property name="text">
-              <string>Gene or HMM</string>
-             </property>
-            </column>
-            <column>
-             <property name="text">
-              <string>Name</string>
-             </property>
-            </column>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="removeSearchTermBtn">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="text">
-             <string>Remove Term</string>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </item>
-        <item row="19" column="0" colspan="2">
-         <widget class="QListWidget" name="hmmList">
-          <property name="selectionMode">
-           <enum>QAbstractItemView::MultiSelection</enum>
-          </property>
-         </widget>
-        </item>
-        <item row="15" column="0" colspan="2">
-         <widget class="QLineEdit" name="hmmFilePath"/>
-        </item>
-        <item row="2" column="0" colspan="2">
-         <widget class="QLineEdit" name="GeneFilePath">
-          <property name="readOnly">
-           <bool>true</bool>
+           <string>Database to Query:</string>
           </property>
          </widget>
         </item>
@@ -349,6 +245,20 @@
           </item>
          </widget>
         </item>
+        <item row="2" column="0" colspan="2">
+         <widget class="QLineEdit" name="GeneFilePath">
+          <property name="readOnly">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="11" column="1">
+         <widget class="QPushButton" name="clearGeneBtn">
+          <property name="text">
+           <string>clear</string>
+          </property>
+         </widget>
+        </item>
         <item row="3" column="0">
          <widget class="QPushButton" name="addGenefilePathBtn">
           <property name="enabled">
@@ -359,17 +269,41 @@
           </property>
          </widget>
         </item>
-        <item row="17" column="1">
-         <widget class="QPushButton" name="addHMMfilebtn">
-          <property name="text">
-           <string>Process HMM FIle</string>
+        <item row="10" column="0" colspan="2">
+         <widget class="QListWidget" name="geneList">
+          <property name="selectionMode">
+           <enum>QAbstractItemView::SingleSelection</enum>
           </property>
          </widget>
         </item>
-        <item row="11" column="1">
-         <widget class="QPushButton" name="clearGeneBtn">
+        <item row="3" column="1">
+         <widget class="QPushButton" name="addGenefileBtn">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="text">
+           <string>Process Gene File</string>
+          </property>
+         </widget>
+        </item>
+        <item row="23" column="1">
+         <widget class="QPushButton" name="clearHMMbtn">
           <property name="text">
            <string>clear</string>
+          </property>
+         </widget>
+        </item>
+        <item row="11" column="0">
+         <widget class="QPushButton" name="addGeneBtn">
+          <property name="text">
+           <string>add Gene</string>
+          </property>
+         </widget>
+        </item>
+        <item row="16" column="0">
+         <widget class="QPushButton" name="addHMMfilePathBtn">
+          <property name="text">
+           <string>HMM File Path</string>
           </property>
          </widget>
         </item>
@@ -451,6 +385,114 @@
           </item>
          </layout>
         </item>
+        <item row="10" column="5" rowspan="8">
+         <layout class="QVBoxLayout" name="verticalLayout_3">
+          <item>
+           <widget class="QTableWidget" name="searchList">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="sizeAdjustPolicy">
+             <enum>QAbstractScrollArea::AdjustToContentsOnFirstShow</enum>
+            </property>
+            <property name="editTriggers">
+             <set>QAbstractItemView::NoEditTriggers</set>
+            </property>
+            <property name="selectionMode">
+             <enum>QAbstractItemView::SingleSelection</enum>
+            </property>
+            <property name="columnCount">
+             <number>3</number>
+            </property>
+            <attribute name="horizontalHeaderCascadingSectionResizes">
+             <bool>true</bool>
+            </attribute>
+            <attribute name="horizontalHeaderStretchLastSection">
+             <bool>false</bool>
+            </attribute>
+            <column>
+             <property name="text">
+              <string>Gene or HMM</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Name</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Required</string>
+             </property>
+            </column>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="removeSearchTermBtn">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="text">
+             <string>Remove Term</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="horizontalLayout_7">
+            <item>
+             <widget class="QLabel" name="label_2">
+              <property name="text">
+               <string>Minimum Number of Hits</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="Line" name="line">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QSpinBox" name="hitsNeededSpinBox">
+              <property name="enabled">
+               <bool>false</bool>
+              </property>
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </item>
+        <item row="16" column="1">
+         <widget class="QPushButton" name="addHMMfilebtn">
+          <property name="text">
+           <string>Process HMM FIle</string>
+          </property>
+         </widget>
+        </item>
+        <item row="19" column="0" colspan="2">
+         <widget class="QListWidget" name="hmmList">
+          <property name="selectionMode">
+           <enum>QAbstractItemView::MultiSelection</enum>
+          </property>
+         </widget>
+        </item>
+        <item row="15" column="0" colspan="2">
+         <widget class="QLineEdit" name="hmmFilePath"/>
+        </item>
        </layout>
       </widget>
      </widget>
@@ -462,7 +504,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>803</width>
+     <width>810</width>
      <height>22</height>
     </rect>
    </property>

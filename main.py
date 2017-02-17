@@ -22,13 +22,13 @@
 '''
 
 import os,csv
-from PyQt5.QtCore import (QFile, QFileInfo, QPoint, QRect, QSettings, QSize,QRegularExpression,
-        Qt, QTextStream,QCoreApplication,QThread,pyqtSignal,pyqtSlot,QObject)
+from PyQt5.QtCore import (QRegularExpression,
+        Qt,QCoreApplication,QThread,pyqtSignal,pyqtSlot,QObject)
 from PyQt5 import QtGui
-from PyQt5.QtWidgets import (QAction, QApplication, QFileDialog, QMainWindow,
-        QMessageBox, QTextEdit,QTableWidgetItem,QWidget,QSizePolicy)
+from PyQt5.QtWidgets import (QApplication, QFileDialog, QMainWindow,
+        QMessageBox,QCheckBox,QTableWidgetItem,QWidget,QListWidgetItem)
 from utils import parseSeqFile,parseHMMfile,generateInputFasta,generateHMMdb,MakeBlastDB,runBLAST,\
-    runHmmsearch,processSearchList,proccessGbks
+    runHmmsearch,processSearchList,proccessGbks,processSearchListOptionalHits
 from collections import Counter
 from glob import iglob
 from itertools import chain
@@ -223,6 +223,37 @@ class runProcessSearchList(QObject):
                                              self.hmmScore,self.hmmDomLen,self.windowSize)
         self.result.emit(filteredClusters)
 
+class runProcessSearchListOptionalHits(QObject):
+    start = pyqtSignal()
+    result = pyqtSignal(dict)
+    def __init__(self,requiredBlastList,requiredHmmList,blastOutFile,hmmOutFile,hmmScore,hmmDomLen,windowSize,
+                 totalHitsRequired, additionalBlastList=[], additionalHmmList=[]):
+        self.requiredBlastList = requiredBlastList
+        self.requiredHmmList = requiredHmmList
+
+        self.additionalBlastList = additionalBlastList
+        self.additionalHmmList = additionalHmmList
+
+        self.blastOutFile = blastOutFile
+        self.hmmOutFile = hmmOutFile
+
+        self.hmmScore = hmmScore
+        self.hmmDomLen = hmmDomLen
+        self.windowSize = windowSize
+
+        self.totalHitsRequired = totalHitsRequired
+
+
+        super(runProcessSearchListOptionalHits, self).__init__()
+    @pyqtSlot()
+    @pyqtSlot(dict)
+    def run(self):
+        filteredClusters = processSearchListOptionalHits(self.requiredBlastList, self.requiredHmmList,
+                                                         self.blastOutFile, self.hmmOutFile,
+                                                         self.hmmScore,self.hmmDomLen,self.windowSize,
+                                                         self.totalHitsRequired,self.additionalBlastList,self.additionalHmmList)
+        self.result.emit(filteredClusters)
+
 class statusWindow(QWidget,status.Ui_runSearch):
     def __init__(self):
         super(self.__class__,self).__init__()
@@ -276,6 +307,8 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
         self.hmmSearchExec = hmmSearchExec
         self.verbose = verbose
 
+        self.currentGeneSelected = ''
+
         ### Set Up Workflow Variables
 
         self.checkSuccessful = False
@@ -312,6 +345,14 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
         self.outputDirectorySelector.currentIndexChanged.connect(self.outdirFunction)
         self.outputDirectorySelector.activated.connect(self.outdirFunction)
 
+        #### Rename Genes in Gene List on Double Click
+        self.geneList.currentRowChanged.connect(self.updateSelectedGene)
+        self.geneList.itemDelegate().commitData.connect(self.updateGeneName)
+#        self.geneList.itemDoubleClicked.connect(self.changeGeneName)
+        ### For Required Genes
+        self.searchList.itemChanged.connect(self.updateSpinBox)
+        self.totalHitsRequired = 0
+        self.hitsNeededSpinBox.valueChanged.connect(self.updateTotalHitsRequired)
         ### Initialize settings for parameters window
         self.paramsWin = paramsWindow()
 
@@ -323,6 +364,38 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
         self.paramsWin.applyBtn.clicked.connect(self.updateParams)
         self.setParamsBtn.clicked.connect(self.showParamWindow)
 
+    def updateTotalHitsRequired(self,value):
+        self.totalHitsRequired = value
+        if self.verbose:
+            print("Total Hits Required: ",self.totalHitsRequired)
+
+    def updateSelectedGene(self,rowNum):
+        if self.geneList.currentItem():
+            self.currentGeneSelected = self.geneList.currentItem().text()
+        else:
+            self.currentGeneSelected = ''
+        if self.verbose:
+            print("Updated Gene Selected", self.currentGeneSelected)
+
+    def updateGeneName(self):
+        if self.verbose:
+            print("Modifying:",self.currentGeneSelected,self.geneDict[self.currentGeneSelected])
+        newName = self.geneList.currentItem().text()
+        ## Check if there is already a gene with that name
+        if newName not in self.geneDict.keys():
+            if self.verbose: print("Changing:", self.currentGeneSelected,"to ",newName)
+            self.geneDict[newName] = self.geneDict[self.currentGeneSelected]
+            del self.geneDict[self.currentGeneSelected]
+            self.currentGeneSelected = newName
+            if self.verbose: print("Dict Value Changed: ",
+                                   self.currentGeneSelected,self.geneDict[self.currentGeneSelected])
+        else:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Warning)
+            msg.setText('There is already a gene named %s. Please Choose Another Name' % newName)
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+            self.geneList.currentItem().setText(self.currentGeneSelected)
 
 
     ### Utility Functions
@@ -440,7 +513,8 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
     def createDbSuccessful(self):
         self.genbankList.clear()
         self.createDbStatusWin.doneBtn.setEnabled(True)
-        self.runnerThread.terminate()
+        if self.runnerThread:
+            self.runnerThread.terminate()
     ### Status Window Methods
     def updateStatusWinText(self,statusWin,currentTaskText,percentCmpLabelText,percentCmpBarValue):
         statusWin.currentTask.setText(currentTaskText)
@@ -545,7 +619,8 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
             statusWin.close()
-            self.runnerThread.terminate()
+            if self.runnerThread:
+                self.runnerThread.terminate()
         elif checkErr == 'noDBpath':
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
@@ -553,7 +628,8 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
             statusWin.close()
-            self.runnerThread.terminate()
+            if self.runnerThread:
+                self.runnerThread.terminate()
         elif checkErr == 'noWriteOutputDir':
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
@@ -561,7 +637,8 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
             statusWin.close()
-            self.runnerThread.terminate()
+            if self.runnerThread:
+                self.runnerThread.terminate()
         elif checkErr == 'noReadDB':
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
@@ -569,7 +646,8 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
             statusWin.close()
-            self.runnerThread.terminate()
+            if self.runnerThread:
+                self.runnerThread.terminate()
         elif checkErr == 'invalidDB':
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
@@ -577,7 +655,8 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
             statusWin.close()
-            self.runnerThread.terminate()
+            if self.runnerThread:
+                self.runnerThread.terminate()
         elif checkErr == 'entriesWarn':
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Warning)
@@ -633,7 +712,8 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
             statusWin.close()
-            self.runnerThread.terminate()
+            if self.runnerThread:
+                self.runnerThread.terminate()
     @pyqtSlot(bool)
     def checkDB(self,flag,statusWin):
         if flag:
@@ -665,7 +745,8 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
             statusWin.close()
-            self.runnerThread.terminate()
+            if self.runnerThread:
+                self.runnerThread.terminate()
     @pyqtSlot(bool)
     def doneBLAST(self,flag,statusWin):
         if flag:
@@ -681,7 +762,8 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
             statusWin.close()
-            self.runnerThread.terminate()
+            if self.runnerThread:
+                self.runnerThread.terminate()
             return
     ### Run Hmmer Methods
     def runHmmer(self):
@@ -710,9 +792,9 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
                     msg.setStandardButtons(QMessageBox.Ok)
                     msg.exec()
                     self.hmmerSuccessful = True
-                    self.processResults()
+                    self.processResultsOptionalHits()
             else:
-                self.processResults()
+                self.processResultsOptionalHits()
     @pyqtSlot(bool,list)
     def hmmDBbuiltCheck(self,flag,hmmsNotFetched,statusWin):
         if flag:
@@ -729,13 +811,14 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
             msg.exec()
             msg.exec()
             statusWin.close()
-            self.runnerThread.terminate()
+            if self.runnerThread:
+                self.runnerThread.terminate()
             return
     @pyqtSlot(bool)
     def hmmSuccessCheck(self,flag,statusWin):
         if flag:
             self.hmmerSuccessful = True
-            self.processResults()
+            self.processResultsOptionalHits()
             return
         else:
             msg = QMessageBox()
@@ -744,8 +827,120 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
             statusWin.close()
-            self.runnerThread.terminate()
+            if self.runnerThread:
+                self.runnerThread.terminate()
     ### Process Filtered Clusters
+    def processResultsOptionalHits(self):
+        self.updateStatusWinText(self.statusWin, 'Parsing Output Files: Creating Search Lists', '4/6', 4)
+        if self.checkSuccessful and self.blastSuccessful and self.hmmerSuccessful:
+            requiredBlastList = []
+            requiredHmmList = []
+
+            optionalBlastList = []
+            optionalHmmList = []
+
+            blastOutFile = self.outputDir + "/blast_results.out"
+            hmmOutFile = self.outputDir + '/hmmSearch.out'
+
+            for idx in range(self.searchList.rowCount()):
+                if self.searchList.item(idx, 0).text() == 'HMMER Hits':
+                    if self.searchList.item(idx,2).checkState()== 2:
+                        requiredHmmList.append(tuple(sorted(self.searchList.item(idx, 1).text().split(' and '))))
+                    else:
+                        optionalHmmList.append(tuple(sorted(self.searchList.item(idx, 1).text().split(' and '))))
+                elif self.searchList.item(idx, 0).text() == 'GENE':
+                    if self.searchList.item(idx, 2).checkState() == 2:
+                        requiredBlastList.append(self.searchList.item(idx, 1).text())
+                    else:
+                        optionalBlastList.append(self.searchList.item(idx, 1).text())
+
+            passBLASTcheck = False
+            passHMMcheck = False
+
+            ### Final Checks before Passing on to Parsers
+            if len(requiredBlastList) + len(requiredHmmList) + len(optionalBlastList) + len(optionalHmmList) == 0:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setText('No HMM Hits or Genes Included in Search List')
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec()
+                self.statusWin.close()
+                self.checkSuccessful = False
+                if self.runnerThread:
+                    self.runnerThread.terminate()
+                return
+            else:
+                if requiredBlastList or optionalBlastList:
+                    try:
+                        assert os.path.isfile(blastOutFile), "BLAST Hits included in search but no " \
+                                                             "BLAST output file found"
+                        passBLASTcheck = True
+                    except AssertionError:
+                        msg = QMessageBox()
+                        msg.setIcon(QMessageBox.Critical)
+                        msg.setText('BLAST Hits included in search but no BLAST output file found!')
+                        msg.setStandardButtons(QMessageBox.Ok)
+                        msg.exec()
+                        self.statusWin.close()
+                        self.checkSuccessful = False
+                        if self.runnerThread:
+                            self.runnerThread.terminate()
+                        return
+                else:
+                    passBLASTcheck = True
+                if requiredHmmList or optionalHmmList:
+                    try:
+                        assert os.path.isfile(hmmOutFile), "HMMer Hits included in search but no " \
+                                                                             "HMMer output file found"
+                        passHMMcheck = True
+                    except AssertionError:
+                        msg = QMessageBox()
+                        msg.setIcon(QMessageBox.Critical)
+                        msg.setText('HMMer Hits requested in search but no HMMer output file found!')
+                        msg.setStandardButtons(QMessageBox.Ok)
+                        msg.exec()
+                        self.statusWin.close()
+                        self.checkSuccessful = False
+                        if self.runnerThread:
+                            self.runnerThread.terminate()
+                        return
+
+                else:
+                    passHMMcheck = True
+            if passBLASTcheck and passHMMcheck:
+                self.updateStatusWinText(self.statusWin,
+                                         'Output Files Parsed. Searching for Clusters.\n'
+                                         '(Minimum Domain Score: %i, Minimum Domain Length: %i Window Size: %i)'
+                    % (self.nameToParamDict['hmmScore'],self.nameToParamDict['hmmDomLen'],self.nameToParamDict['windowSize']),
+                                         '5/6', 5)
+                if not self.runnerThread:
+                    self.runnerThread = QThread()
+                    self.runnerThread.start()
+                if self.totalHitsRequired == len(requiredBlastList) + len(requiredHmmList) :
+                    self.processSearchListWorker = runProcessSearchList(requiredBlastList, requiredHmmList, blastOutFile, hmmOutFile,
+                                                                        self.nameToParamDict['hmmScore'],
+                                                                        self.nameToParamDict['hmmDomLen'],
+                                                                        self.nameToParamDict['windowSize'])
+                    self.processSearchListWorker.result.connect(
+                        lambda x: self.generateResults(x, self.statusWin, requiredBlastList, requiredHmmList))
+                    self.processSearchListWorker.moveToThread(self.runnerThread)
+                    self.processSearchListWorker.start.connect(self.processSearchListWorker.run)
+                    self.processSearchListWorker.start.emit()
+                else:
+                    self.processSearchListWorker = runProcessSearchListOptionalHits(requiredBlastList,requiredHmmList,
+                                                                                    blastOutFile,hmmOutFile,
+                                                                                    self.nameToParamDict['hmmScore'],
+                                                                                    self.nameToParamDict['hmmDomLen'],
+                                                                                    self.nameToParamDict['windowSize'],
+                                                                                    self.totalHitsRequired,
+                                                                                    optionalBlastList,optionalHmmList)
+                    self.processSearchListWorker.result.connect(
+                        lambda x: self.generateResults(x, self.statusWin,requiredBlastList+optionalBlastList,
+                                                       requiredHmmList+optionalHmmList))
+                    self.processSearchListWorker.moveToThread(self.runnerThread)
+                    self.processSearchListWorker.start.connect(self.processSearchListWorker.run)
+                    self.processSearchListWorker.start.emit()
+
     def processResults(self):
         self.updateStatusWinText(self.statusWin, 'Parsing Output Files: Creating Search Lists', '4/6', 4)
         if self.checkSuccessful and self.blastSuccessful and self.hmmerSuccessful:
@@ -773,7 +968,8 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
                 msg.exec()
                 self.statusWin.close()
                 self.checkSuccessful = False
-                self.runnerThread.terminate()
+                if self.runnerThread:
+                    self.runnerThread.terminate()
                 return
             else:
                 if blastList:
@@ -789,7 +985,8 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
                         msg.exec()
                         self.statusWin.close()
                         self.checkSuccessful = False
-                        self.runnerThread.terminate()
+                        if self.runnerThread:
+                            self.runnerThread.terminate()
                         return
                 else:
                     passBLASTcheck = True
@@ -806,7 +1003,8 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
                         msg.exec()
                         self.statusWin.close()
                         self.checkSuccessful = False
-                        self.runnerThread.terminate()
+                        if self.runnerThread:
+                            self.runnerThread.terminate()
                         return
 
                 else:
@@ -836,13 +1034,33 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
                                      '6/6', 6)
             statusWin.viewResultsBtn.setEnabled(True)
             statusWin.viewResultsBtn.clicked.connect(lambda: self.showResultsWindow(blastList,hmmList,filteredClusters))
-            self.runnerThread.terminate()
+            if self.runnerThread:
+                self.runnerThread.terminate()
         else:
             self.updateStatusWinText(statusWin, 'Search Complete: No Results Found',
                                      '6/6', 6)
             self.checkSuccessful = False
-            self.runnerThread.terminate()
+            if self.runnerThread:
+                self.runnerThread.terminate()
             return
+    #### GUI Functions #####
+    def updateSpinBox(self):
+        if self.searchList.rowCount() == 0:
+            self.hitsNeededSpinBox.setEnabled(False)
+        else:
+            maxHits = self.searchList.rowCount()
+            minHits = sum(1 for idx in range(self.searchList.rowCount())
+                          if self.searchList.item(idx,2) and
+                          self.searchList.item(idx,2).checkState()==2)
+            if self.verbose:
+                print("Setting range: %i-%i" % (minHits,maxHits))
+            self.hitsNeededSpinBox.setRange(minHits,maxHits)
+            self.hitsNeededSpinBox.setValue(minHits)
+            self.hitsNeededSpinBox.setEnabled(True)
+        self.totalHitsRequired = self.hitsNeededSpinBox.value()
+        if self.verbose:
+            print("Total Hits Required: ",self.totalHitsRequired)
+
     def removeSearchTerm(self):
         itemType =  self.searchList.item(self.searchList.currentRow(),0).text()
         termToRemove = self.searchList.item(self.searchList.currentRow(),1).text()
@@ -861,6 +1079,7 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
                 del self.forHmmer[hmmKey]
             if self.verbose: print(self.forHmmer)
             self.searchList.removeRow(self.searchList.currentRow())
+        self.updateSpinBox()
     def outdirFunction(self):
         if 'Select Directory...' in self.outputDirectorySelector.currentText():
             dirName = QFileDialog.getExistingDirectory(self)
@@ -891,7 +1110,11 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
             if extension in valid_extensions:
                 genesToAdd,self.geneDict = parseSeqFile(self.GeneFilePath.text(),self.geneDict)
                 for gene in genesToAdd:
-                    self.geneList.addItem(gene)
+                    geneName = gene
+                    geneItem = QListWidgetItem()
+                    geneItem.setText(geneName)
+                    geneItem.setFlags(Qt.ItemIsEditable|Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+                    self.geneList.addItem(geneItem)
                 self.clearGeneFilePath()
             else:
                 msg = QMessageBox()
@@ -917,21 +1140,34 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
             if self.verbose: (gene.text())
             if gene.text() not in self.forBLAST.keys():
                 currentRowCount = self.searchList.rowCount()
+                checkbox = QTableWidgetItem()
+                checkbox.setFlags(Qt.ItemIsUserCheckable|Qt.ItemIsEditable|Qt.ItemIsEnabled)
+                checkbox.setCheckState(2)
                 self.searchList.insertRow(currentRowCount)
                 self.searchList.setItem(currentRowCount,0,QTableWidgetItem('GENE'))
                 self.searchList.setItem(currentRowCount,1,QTableWidgetItem(gene.text()))
+                self.searchList.setItem(currentRowCount,2,checkbox)
                 self.searchList.resizeColumnsToContents()
                 self.forBLAST[gene.text()] = self.geneDict[gene.text()]
+                self.updateSpinBox()
     def loadHMM(self):
         # hmmDict -> {(hmmset):set(paths to hmms)}
         hmmsToAdd = tuple(sorted(hmmObject.text() for hmmObject in self.hmmList.selectedItems()))
         if hmmsToAdd:
+            if self.searchList.rowCount() == 0:
+                self.hitsNeededSpinBox.setRange(1, 1)
+                self.hitsNeededSpinBox.setEnabled(True)
             self.forHmmer[hmmsToAdd] = set(self.hmmDict[hmm] for hmm in hmmsToAdd)
             currentRowCount = self.searchList.rowCount()
+            checkbox = QTableWidgetItem()
+            checkbox.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEditable | Qt.ItemIsEnabled)
+            checkbox.setCheckState(2)
             self.searchList.insertRow(currentRowCount)
             self.searchList.setItem(currentRowCount, 0, QTableWidgetItem('HMMER Hits'))
             self.searchList.setItem(currentRowCount, 1, QTableWidgetItem(' and '.join(hmmsToAdd)))
+            self.searchList.setItem(currentRowCount, 2, checkbox)
             self.searchList.resizeColumnsToContents()
+            self.updateSpinBox()
             if self.verbose:
                 print(self.forHmmer)
             self.hmmList.clearSelection()
