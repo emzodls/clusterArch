@@ -16,7 +16,7 @@ if sys.platform == "darwin":
 # Dependencies are automatically detected, but it might need fine tuning.
 build_exe_options = {"packages": [], "excludes": ["tkinter"],'include_files':includefiles,"optimize":2}
 if sys.platform == "win32":
-    build_exe_options['include-msvcr'] = True
+    build_exe_options['include_msvcr'] = True
 
 
 setup(  name = "clusterTools",

@@ -366,7 +366,7 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
     ### Genbank Panel Functions
     def loadGbkDir(self):
         if sys.platform == 'win32':
-            dirName = QFileDialog.getExistingDirectory(ptions=QFileDialog.DontUseNativeDialog)
+            dirName = QFileDialog.getExistingDirectory(options=QFileDialog.DontUseNativeDialog)
         else:
             dirName = QFileDialog.getExistingDirectory()
         if dirName and os.access(dirName, os.R_OK):
