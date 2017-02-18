@@ -6,12 +6,12 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>810</width>
-    <height>531</height>
+    <width>866</width>
+    <height>574</height>
    </rect>
   </property>
   <property name="sizePolicy">
-   <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+   <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
     <horstretch>0</horstretch>
     <verstretch>0</verstretch>
    </sizepolicy>
@@ -29,9 +29,15 @@
      <verstretch>0</verstretch>
     </sizepolicy>
    </property>
-   <layout class="QHBoxLayout" name="horizontalLayout">
-    <item>
+   <layout class="QGridLayout" name="gridLayout">
+    <item row="0" column="0">
      <widget class="QTabWidget" name="tabWidget">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
       <property name="currentIndex">
        <number>1</number>
       </property>
@@ -206,139 +212,468 @@
        <attribute name="title">
         <string>Run Search</string>
        </attribute>
-       <layout class="QGridLayout" name="gridLayout">
-        <item row="23" column="0">
-         <widget class="QPushButton" name="addHMMbtn">
-          <property name="text">
-           <string>add HMM hits</string>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="5">
-         <widget class="QLabel" name="databaseLabel">
-          <property name="text">
-           <string>Database to Query:</string>
-          </property>
-         </widget>
-        </item>
-        <item row="3" column="5">
-         <widget class="QComboBox" name="dataBaseSelector">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="currentIndex">
-           <number>-1</number>
-          </property>
-          <property name="insertPolicy">
-           <enum>QComboBox::InsertAtTop</enum>
-          </property>
-          <property name="sizeAdjustPolicy">
-           <enum>QComboBox::AdjustToContentsOnFirstShow</enum>
-          </property>
+       <layout class="QHBoxLayout" name="horizontalLayout_13" stretch="0,0,0">
+        <property name="leftMargin">
+         <number>0</number>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
+        </property>
+        <item>
+         <layout class="QVBoxLayout" name="verticalLayout_9" stretch="0">
           <item>
-           <property name="text">
-            <string>add database...</string>
-           </property>
-          </item>
-         </widget>
-        </item>
-        <item row="2" column="0" colspan="2">
-         <widget class="QLineEdit" name="GeneFilePath">
-          <property name="readOnly">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item row="11" column="1">
-         <widget class="QPushButton" name="clearGeneBtn">
-          <property name="text">
-           <string>clear</string>
-          </property>
-         </widget>
-        </item>
-        <item row="3" column="0">
-         <widget class="QPushButton" name="addGenefilePathBtn">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="text">
-           <string>Gene File Path</string>
-          </property>
-         </widget>
-        </item>
-        <item row="10" column="0" colspan="2">
-         <widget class="QListWidget" name="geneList">
-          <property name="selectionMode">
-           <enum>QAbstractItemView::SingleSelection</enum>
-          </property>
-         </widget>
-        </item>
-        <item row="3" column="1">
-         <widget class="QPushButton" name="addGenefileBtn">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="text">
-           <string>Process Gene File</string>
-          </property>
-         </widget>
-        </item>
-        <item row="23" column="1">
-         <widget class="QPushButton" name="clearHMMbtn">
-          <property name="text">
-           <string>clear</string>
-          </property>
-         </widget>
-        </item>
-        <item row="11" column="0">
-         <widget class="QPushButton" name="addGeneBtn">
-          <property name="text">
-           <string>add Gene</string>
-          </property>
-         </widget>
-        </item>
-        <item row="16" column="0">
-         <widget class="QPushButton" name="addHMMfilePathBtn">
-          <property name="text">
-           <string>HMM File Path</string>
-          </property>
-         </widget>
-        </item>
-        <item row="19" column="5">
-         <layout class="QVBoxLayout" name="verticalLayout_2">
-          <item>
-           <widget class="QLabel" name="databaseLabel_2">
-            <property name="text">
-             <string>Output Directory:</string>
-            </property>
-           </widget>
-          </item>
-          <item alignment="Qt::AlignTop">
-           <widget class="QComboBox" name="outputDirectorySelector">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="currentIndex">
-             <number>-1</number>
-            </property>
-            <property name="insertPolicy">
-             <enum>QComboBox::InsertAtTop</enum>
-            </property>
-            <property name="sizeAdjustPolicy">
-             <enum>QComboBox::AdjustToContentsOnFirstShow</enum>
+           <layout class="QVBoxLayout" name="verticalLayout_5" stretch="0,0,0,0,0,0,0">
+            <property name="spacing">
+             <number>2</number>
             </property>
             <item>
-             <property name="text">
-              <string>Select Directory...</string>
-             </property>
+             <widget class="QLabel" name="label_4">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="text">
+               <string>Genes</string>
+              </property>
+             </widget>
             </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_8">
+              <item>
+               <widget class="QLineEdit" name="GeneFilePath">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="readOnly">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="addGenefilePathBtn">
+                <property name="enabled">
+                 <bool>true</bool>
+                </property>
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="text">
+                 <string>Select File</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="addGenefileBtn">
+                <property name="enabled">
+                 <bool>true</bool>
+                </property>
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="text">
+                 <string>Process</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_10" stretch="0,0">
+              <item>
+               <widget class="QListWidget" name="geneList">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="selectionMode">
+                 <enum>QAbstractItemView::SingleSelection</enum>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <layout class="QVBoxLayout" name="verticalLayout_7">
+                <property name="spacing">
+                 <number>0</number>
+                </property>
+                <item>
+                 <widget class="QPushButton" name="addGeneSeqBtn">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="text">
+                   <string>Input Gene </string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="addGeneBtn">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="text">
+                   <string>Add Gene</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="clearGeneBtn">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="text">
+                   <string>Clear List</string>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <widget class="Line" name="line_2">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="label_3">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="text">
+               <string>HMMs</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_11">
+              <item>
+               <widget class="QLineEdit" name="hmmFilePath">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="addHMMfilePathBtn">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="text">
+                 <string>Select File</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="addHMMfilebtn">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="text">
+                 <string>Process</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_12" stretch="1,0">
+              <item>
+               <widget class="QListWidget" name="hmmList">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="selectionMode">
+                 <enum>QAbstractItemView::MultiSelection</enum>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <layout class="QVBoxLayout" name="verticalLayout_8">
+                <property name="spacing">
+                 <number>0</number>
+                </property>
+                <item>
+                 <widget class="QPushButton" name="addHMMbtn">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="text">
+                   <string>Add HMMs</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="clearHMMbtn">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="text">
+                   <string>Clear List</string>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </item>
+             </layout>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="Line" name="line_6">
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="verticalLayout_2">
+          <property name="spacing">
+           <number>2</number>
+          </property>
+          <item>
+           <layout class="QHBoxLayout" name="horizontalLayout">
+            <item>
+             <widget class="QLabel" name="databaseLabel">
+              <property name="text">
+               <string>Database to Query:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QComboBox" name="dataBaseSelector">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="currentIndex">
+               <number>-1</number>
+              </property>
+              <property name="insertPolicy">
+               <enum>QComboBox::InsertAtTop</enum>
+              </property>
+              <property name="sizeAdjustPolicy">
+               <enum>QComboBox::AdjustToContentsOnFirstShow</enum>
+              </property>
+              <item>
+               <property name="text">
+                <string>add database...</string>
+               </property>
+              </item>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="Line" name="line_4">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
            </widget>
+          </item>
+          <item>
+           <layout class="QVBoxLayout" name="verticalLayout_3" stretch="0,0,0">
+            <property name="spacing">
+             <number>2</number>
+            </property>
+            <item>
+             <widget class="QLabel" name="label_5">
+              <property name="text">
+               <string>Search List:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QTableWidget" name="searchList">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="sizeAdjustPolicy">
+               <enum>QAbstractScrollArea::AdjustToContentsOnFirstShow</enum>
+              </property>
+              <property name="editTriggers">
+               <set>QAbstractItemView::NoEditTriggers</set>
+              </property>
+              <property name="selectionMode">
+               <enum>QAbstractItemView::SingleSelection</enum>
+              </property>
+              <property name="columnCount">
+               <number>3</number>
+              </property>
+              <attribute name="horizontalHeaderCascadingSectionResizes">
+               <bool>true</bool>
+              </attribute>
+              <attribute name="horizontalHeaderStretchLastSection">
+               <bool>false</bool>
+              </attribute>
+              <column>
+               <property name="text">
+                <string>Gene or HMM</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Name</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>Required</string>
+               </property>
+              </column>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="removeSearchTermBtn">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="text">
+               <string>Remove Term</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="Line" name="line_3">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="horizontalLayout_7">
+            <item>
+             <widget class="QLabel" name="label_2">
+              <property name="text">
+               <string>Minimum Number of Hits</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="Line" name="line">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QSpinBox" name="hitsNeededSpinBox">
+              <property name="enabled">
+               <bool>false</bool>
+              </property>
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="Line" name="line_5">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="horizontalLayout_9">
+            <item>
+             <widget class="QLabel" name="databaseLabel_2">
+              <property name="text">
+               <string>Output Directory:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QComboBox" name="outputDirectorySelector">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="currentIndex">
+               <number>-1</number>
+              </property>
+              <property name="insertPolicy">
+               <enum>QComboBox::InsertAtTop</enum>
+              </property>
+              <property name="sizeAdjustPolicy">
+               <enum>QComboBox::AdjustToContentsOnFirstShow</enum>
+              </property>
+              <item>
+               <property name="text">
+                <string>Select Directory...</string>
+               </property>
+              </item>
+             </widget>
+            </item>
+           </layout>
           </item>
           <item>
            <layout class="QHBoxLayout" name="horizontalLayout_5">
@@ -385,114 +720,6 @@
           </item>
          </layout>
         </item>
-        <item row="10" column="5" rowspan="8">
-         <layout class="QVBoxLayout" name="verticalLayout_3">
-          <item>
-           <widget class="QTableWidget" name="searchList">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="sizeAdjustPolicy">
-             <enum>QAbstractScrollArea::AdjustToContentsOnFirstShow</enum>
-            </property>
-            <property name="editTriggers">
-             <set>QAbstractItemView::NoEditTriggers</set>
-            </property>
-            <property name="selectionMode">
-             <enum>QAbstractItemView::SingleSelection</enum>
-            </property>
-            <property name="columnCount">
-             <number>3</number>
-            </property>
-            <attribute name="horizontalHeaderCascadingSectionResizes">
-             <bool>true</bool>
-            </attribute>
-            <attribute name="horizontalHeaderStretchLastSection">
-             <bool>false</bool>
-            </attribute>
-            <column>
-             <property name="text">
-              <string>Gene or HMM</string>
-             </property>
-            </column>
-            <column>
-             <property name="text">
-              <string>Name</string>
-             </property>
-            </column>
-            <column>
-             <property name="text">
-              <string>Required</string>
-             </property>
-            </column>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="removeSearchTermBtn">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="text">
-             <string>Remove Term</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <layout class="QHBoxLayout" name="horizontalLayout_7">
-            <item>
-             <widget class="QLabel" name="label_2">
-              <property name="text">
-               <string>Minimum Number of Hits</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="Line" name="line">
-              <property name="orientation">
-               <enum>Qt::Vertical</enum>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QSpinBox" name="hitsNeededSpinBox">
-              <property name="enabled">
-               <bool>false</bool>
-              </property>
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-         </layout>
-        </item>
-        <item row="16" column="1">
-         <widget class="QPushButton" name="addHMMfilebtn">
-          <property name="text">
-           <string>Process HMM FIle</string>
-          </property>
-         </widget>
-        </item>
-        <item row="19" column="0" colspan="2">
-         <widget class="QListWidget" name="hmmList">
-          <property name="selectionMode">
-           <enum>QAbstractItemView::MultiSelection</enum>
-          </property>
-         </widget>
-        </item>
-        <item row="15" column="0" colspan="2">
-         <widget class="QLineEdit" name="hmmFilePath"/>
-        </item>
        </layout>
       </widget>
      </widget>
@@ -504,7 +731,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>810</width>
+     <width>866</width>
      <height>22</height>
     </rect>
    </property>

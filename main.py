@@ -33,7 +33,7 @@ from collections import Counter
 from glob import iglob
 from itertools import chain
 
-import myGui_Beta,resultsWindow,status,parameters,sys,createDbStatus
+import myGui2,resultsWindow,status,parameters,sys,createDbStatus,addGene
 
 class createDbWorker(QObject):
     start = pyqtSignal()
@@ -254,6 +254,13 @@ class runProcessSearchListOptionalHits(QObject):
                                                          self.totalHitsRequired,self.additionalBlastList,self.additionalHmmList)
         self.result.emit(filteredClusters)
 
+class addGeneWindow(QWidget,addGene.Ui_addGeneWindow):
+    def __init__(self):
+        super(self.__class__,self).__init__()
+        self.setupUi(self)
+        regex = QRegularExpression('^[ACDEFGHIKLMNPQRSTVWYacdefghiklmnpqrstvwy]+$')
+        self.AminoAcidValidator = QtGui.QRegularExpressionValidator(regex)
+
 class statusWindow(QWidget,status.Ui_runSearch):
     def __init__(self):
         super(self.__class__,self).__init__()
@@ -285,7 +292,7 @@ class resultsWindow(QWidget,resultsWindow.Ui_Results):
         super(self.__class__,self).__init__()
         self.setupUi(self)
 
-class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
+class mainApp(QMainWindow, myGui2.Ui_clusterArch):
     def __init__(self,makeblastdbExec,blastExec,hmmFetchExec,hmmSearchExec,verbose=False):
 
         super(self.__class__, self).__init__()
@@ -324,7 +331,7 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
 
         self.addGenefilePathBtn.clicked.connect(self.openGene)
         self.addHMMfilePathBtn.clicked.connect(self.openHmm)
-
+        self.addGeneSeqBtn.clicked.connect(self.showAddGeneWin)
         self.addGenefileBtn.clicked.connect(self.loadGeneFile)
         self.addHMMfilebtn.clicked.connect(self.loadHMMFile)
 
@@ -363,6 +370,57 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
         self.paramsWin.windowSize.textChanged.connect(self.activateApply)
         self.paramsWin.applyBtn.clicked.connect(self.updateParams)
         self.setParamsBtn.clicked.connect(self.showParamWindow)
+    def showAddGeneWin(self):
+        self.addGeneWin = addGeneWindow()
+        self.addGeneWin.addGeneBtn.clicked.connect(self.addGeneSeq)
+        self.addGeneWin.show()
+    def addGeneSeq(self):
+        geneName = self.addGeneWin.geneName.text()
+        geneSeqToAdd = self.addGeneWin.geneSequence.toPlainText()
+        geneSeqToAdd = geneSeqToAdd.replace('\n','')
+        geneSeqToAdd = geneSeqToAdd.replace('\t', '')
+        geneSeqToAdd = geneSeqToAdd.strip()
+        geneSeqToAdd = geneSeqToAdd.upper()
+        if geneName:
+            if geneSeqToAdd:
+                if geneName in self.geneDict.keys():
+                    msg = QMessageBox()
+                    msg.setIcon(QMessageBox.Warning)
+                    msg.setText('There is already a Gene Named %s. Please choose another name.' % geneName)
+                    msg.setStandardButtons(QMessageBox.Ok)
+                    msg.exec()
+                    self.addGeneWin.geneName.setText('')
+                else:
+                    if self.verbose:
+                        print(self.addGeneWin.AminoAcidValidator.validate(geneSeqToAdd,0))
+                    if self.addGeneWin.AminoAcidValidator.validate(geneSeqToAdd,0)[0] == 2:
+                        self.geneDict[geneName] = str(geneSeqToAdd)
+                        geneItem = QListWidgetItem()
+                        geneItem.setText(geneName)
+                        geneItem.setFlags(Qt.ItemIsEditable|Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+                        self.geneList.addItem(geneItem)
+                        self.addGeneWin.close()
+                    else:
+                        msg = QMessageBox()
+                        msg.setIcon(QMessageBox.Warning)
+                        msg.setText('Please Enter A Valid Amino Acid Sequence')
+                        msg.setStandardButtons(QMessageBox.Ok)
+                        msg.exec()
+                        self.addGeneWin.geneSequence.setText('')
+            else:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Warning)
+                msg.setText('No Amino Acid Sequence Detected')
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec()
+                self.addGeneWin.geneSequence.setText('')
+        else:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Warning)
+            msg.setText('No Gene Name Specified')
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+            self.addGeneWin.geneSequence.setText('')
 
     def updateTotalHitsRequired(self,value):
         self.totalHitsRequired = value
@@ -381,21 +439,34 @@ class mainApp(QMainWindow, myGui_Beta.Ui_clusterArch):
         if self.verbose:
             print("Modifying:",self.currentGeneSelected,self.geneDict[self.currentGeneSelected])
         newName = self.geneList.currentItem().text()
-        ## Check if there is already a gene with that name
-        if newName not in self.geneDict.keys():
-            if self.verbose: print("Changing:", self.currentGeneSelected,"to ",newName)
-            self.geneDict[newName] = self.geneDict[self.currentGeneSelected]
-            del self.geneDict[self.currentGeneSelected]
-            self.currentGeneSelected = newName
-            if self.verbose: print("Dict Value Changed: ",
-                                   self.currentGeneSelected,self.geneDict[self.currentGeneSelected])
-        else:
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Warning)
-            msg.setText('There is already a gene named %s. Please Choose Another Name' % newName)
-            msg.setStandardButtons(QMessageBox.Ok)
-            msg.exec()
-            self.geneList.currentItem().setText(self.currentGeneSelected)
+        ## Check that you actually edited the gene
+        if newName != self.currentGeneSelected:
+            ## Check if there is already a gene with that name
+            if newName not in self.geneDict.keys():
+                if self.verbose: print("Changing:", self.currentGeneSelected,"to ",newName)
+                self.geneDict[newName] = self.geneDict[self.currentGeneSelected]
+                searchListIdxs = []
+                for idx in range(self.searchList.rowCount()):
+                    if self.searchList.item(idx, 0).text() == 'GENE' and self.searchList.item(idx,1).text() == self.currentGeneSelected:
+                        searchListIdxs.append(idx)
+                if searchListIdxs:
+                    self.forBLAST[newName] = self.forBLAST[self.currentGeneSelected]
+                    del self.forBLAST[self.currentGeneSelected]
+                    for idx in searchListIdxs:
+                        self.searchList.item(idx, 1).setText(newName)
+                self.updateSpinBox()
+
+                del self.geneDict[self.currentGeneSelected]
+                self.currentGeneSelected = newName
+                if self.verbose: print("Dict Value Changed: ",
+                                       self.currentGeneSelected,self.geneDict[self.currentGeneSelected])
+            else:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Warning)
+                msg.setText('There is already a gene named %s. Please Choose Another Name' % newName)
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec()
+                self.geneList.currentItem().setText(self.currentGeneSelected)
 
 
     ### Utility Functions
