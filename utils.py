@@ -128,7 +128,8 @@ def MakeBlastDB(makeblastdbExec,dbPath,outputDir,outDBName):
     if platform.system() == 'Windows':
         dbPath = get_short_path_name(dbPath)
         outputDir = get_short_path_name(outputDir)
-    command = [makeblastdbExec, "-in", dbPath, "-dbtype", "prot","-out",os.path.join(outputDir,outDBName)]
+    command = [makeblastdbExec, '-in "', dbPath, '" -dbtype', "prot",'-out" ',os.path.join(outputDir,outDBName)]
+    command = [makeblastdbExec, '-in "', dbPath, '" -dbtype', "prot",'-out" ',os.path.join(outputDir,outDBName)]
     out, err, retcode = execute(command)
     if retcode != 0:
         print('makeblastDB failed with retcode %d: %r' % (retcode, err))

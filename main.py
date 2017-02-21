@@ -32,8 +32,34 @@ from utils import parseSeqFile,parseHMMfile,generateInputFasta,generateHMMdb,Mak
 from collections import Counter
 from glob import iglob
 from itertools import chain
+from ncbiUtils import ncbiQuery,ncbiSummary
 
-import myGui2,resultsWindow,status,parameters,sys,createDbStatus,addGene
+import mainGuiNCBI,resultsWindow,status,parameters,sys,createDbStatus,addGene
+
+class ncbiQueryWorker(QObject):
+    start = pyqtSignal()
+    connectionErr = pyqtSignal()
+    result = pyqtSignal(int,dict)
+    def __init__(self,keyword,organism,accession,minLength,maxLength,retmax):
+        self.keyword = keyword
+        self.organism = organism
+        self.accession = accession
+        self.minLength = minLength
+        self.maxLength = maxLength
+        self.retmax = retmax
+        super(ncbiQueryWorker, self).__init__()
+
+    @pyqtSlot()
+    @pyqtSlot(int,dict)
+    def run(self):
+        try:
+            numHits, ncbiIDsList = ncbiQuery(self.keyword,self.organism,self.accession,
+                                             self.minLength,self.maxLength,self.retmax)
+            ncbiDict = ncbiSummary(ncbiIDsList, chunkSize=250)
+        except:
+            self.connectionErr.emit()
+        self.result.emit(numHits,ncbiDict)
+
 
 class createDbWorker(QObject):
     start = pyqtSignal()
@@ -292,11 +318,29 @@ class resultsWindow(QWidget,resultsWindow.Ui_Results):
         super(self.__class__,self).__init__()
         self.setupUi(self)
 
-class mainApp(QMainWindow, myGui2.Ui_clusterArch):
+class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
     def __init__(self,makeblastdbExec,blastExec,hmmFetchExec,hmmSearchExec,verbose=False):
 
         super(self.__class__, self).__init__()
         self.setupUi(self)
+
+        ##### Set up NCBI Interface
+        self.ncbiDict = dict()
+
+        posIntValidator = QtGui.QIntValidator(0,1000000000)
+
+        maxEntriesValidator = QtGui.QIntValidator(1,1000)
+
+        self.minLength.setValidator(posIntValidator)
+        self.maxLength.setValidator(posIntValidator)
+        self.numEntries.setValidator(maxEntriesValidator)
+
+        self.minLength.setText('0')
+        self.maxLength.setText('1000000000')
+        self.numEntries.setText('1000')
+
+        self.searchNcbiBtn.clicked.connect(self.ncbiQuery)
+
         ### Set Up Parameters and Shared Data Structures
         self.nameToParamDict = {'blastEval': 1e-5, 'hmmEval': 1e-5, 'hmmScore': 30,
                                 'hmmDomLen': 15, 'windowSize': 50000}
@@ -355,7 +399,6 @@ class mainApp(QMainWindow, myGui2.Ui_clusterArch):
         #### Rename Genes in Gene List on Double Click
         self.geneList.currentRowChanged.connect(self.updateSelectedGene)
         self.geneList.itemDelegate().commitData.connect(self.updateGeneName)
-#        self.geneList.itemDoubleClicked.connect(self.changeGeneName)
         ### For Required Genes
         self.searchList.itemChanged.connect(self.updateSpinBox)
         self.totalHitsRequired = 0
@@ -370,6 +413,66 @@ class mainApp(QMainWindow, myGui2.Ui_clusterArch):
         self.paramsWin.windowSize.textChanged.connect(self.activateApply)
         self.paramsWin.applyBtn.clicked.connect(self.updateParams)
         self.setParamsBtn.clicked.connect(self.showParamWindow)
+    ##### NCBI Query Functions #########
+    def ncbiQuery(self):
+        keyword = self.ncbiKeyword.text()
+        organism = self.ncbiOrganism.text()
+        accession = self.ncbiAccession.text()
+        minLength = self.minLength.text()
+        maxLength = self.maxLength.text()
+        retmax = self.numEntries.text()
+
+        if not keyword and not organism and not accession:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Please Specify at Least One Search Parameter")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+        else:
+            if minLength >= maxLength:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Warning)
+                msg.setText("Min Length > Max Length, Using defaults.")
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec()
+
+            self.runnerThread = QThread()
+            self.runnerThread.start()
+            self.ncbiQueryWorker = ncbiQueryWorker(keyword,organism,accession,minLength,maxLength,retmax)
+            self.ncbiQueryWorker.connectionErr.connect(self.connectionError)
+            self.ncbiQueryWorker.moveToThread(self.runnerThread)
+            self.ncbiQueryWorker.start.connect(self.ncbiQueryWorker.run)
+            self.ncbiQueryWorker.start.emit()
+            self.ncbiQueryWorker.result.connect(self.updateSearchResults)
+
+    def connectionError(self):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Critical)
+        msg.setText("Problems Connecting to NCBI Database")
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec()
+
+    def updateSearchResults(self,numHits,ncbiDict):
+        if numHits == 0:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setText("No Results Found")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+        elif numHits >= 1000:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setText("More than 1000 Hits, showing only Top %s results" % self.numEntries.text())
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+
+        self.ncbiDict = ncbiDict
+
+        for gi,entry in ncbiDict.items():
+            self.ncbiFileSearchResults.addItem("{}:{}".format(entry[1],entry[2]))
+
+
+    ###########################
     def showAddGeneWin(self):
         self.addGeneWin = addGeneWindow()
         self.addGeneWin.addGeneBtn.clicked.connect(self.addGeneSeq)
@@ -421,12 +524,10 @@ class mainApp(QMainWindow, myGui2.Ui_clusterArch):
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
             self.addGeneWin.geneSequence.setText('')
-
     def updateTotalHitsRequired(self,value):
         self.totalHitsRequired = value
         if self.verbose:
             print("Total Hits Required: ",self.totalHitsRequired)
-
     def updateSelectedGene(self,rowNum):
         if self.geneList.currentItem():
             self.currentGeneSelected = self.geneList.currentItem().text()
@@ -434,7 +535,6 @@ class mainApp(QMainWindow, myGui2.Ui_clusterArch):
             self.currentGeneSelected = ''
         if self.verbose:
             print("Updated Gene Selected", self.currentGeneSelected)
-
     def updateGeneName(self):
         if self.verbose:
             print("Modifying:",self.currentGeneSelected,self.geneDict[self.currentGeneSelected])
@@ -467,8 +567,6 @@ class mainApp(QMainWindow, myGui2.Ui_clusterArch):
                 msg.setStandardButtons(QMessageBox.Ok)
                 msg.exec()
                 self.geneList.currentItem().setText(self.currentGeneSelected)
-
-
     ### Utility Functions
     def updateParams(self):
         parameterObjs = [self.paramsWin.blastEval,self.paramsWin.hmmEval,self.paramsWin.hmmDomLen,
