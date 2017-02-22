@@ -298,7 +298,7 @@ def proccessGbks(taskList,outputDir,signal):
             path,fileName = os.path.split(gbkFile)
             species_id,ext = os.path.splitext(fileName)
             signal.emit(fileName)
-            CDS_prot_outfile_name = os.path.join(outputDir,'clusterArchDB.fasta')
+            CDS_prot_outfile_name = outputDir
             cds_ctr = 0
             entry_ctr = 1
             # See if user wants a different name

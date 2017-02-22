@@ -30,16 +30,16 @@ from PyQt5.QtWidgets import (QApplication, QFileDialog, QMainWindow,
 from utils import parseSeqFile,parseHMMfile,generateInputFasta,generateHMMdb,MakeBlastDB,runBLAST,\
     runHmmsearch,processSearchList,proccessGbks,processSearchListOptionalHits
 from collections import Counter
-from glob import iglob
+from glob import iglob,glob
 from itertools import chain
-from ncbiUtils import ncbiQuery,ncbiSummary
+from ncbiUtils import ncbiQuery,ncbiSummary,ncbiFetch
 
-import mainGuiNCBI,resultsWindow,status,parameters,sys,createDbStatus,addGene
+import mainGuiNCBI,resultsWindow,status,parameters,sys,createDbStatus,addGene,downloadNcbiFilesWin
 
 class ncbiQueryWorker(QObject):
     start = pyqtSignal()
     connectionErr = pyqtSignal()
-    result = pyqtSignal(int,dict)
+    result = pyqtSignal(int,dict,dict)
     def __init__(self,keyword,organism,accession,minLength,maxLength,retmax):
         self.keyword = keyword
         self.organism = organism
@@ -50,16 +50,34 @@ class ncbiQueryWorker(QObject):
         super(ncbiQueryWorker, self).__init__()
 
     @pyqtSlot()
-    @pyqtSlot(int,dict)
+    @pyqtSlot(int,dict,dict)
     def run(self):
         try:
             numHits, ncbiIDsList = ncbiQuery(self.keyword,self.organism,self.accession,
                                              self.minLength,self.maxLength,self.retmax)
-            ncbiDict = ncbiSummary(ncbiIDsList, chunkSize=250)
+            ncbiDict,acc2gi = ncbiSummary(ncbiIDsList, chunkSize=250)
         except:
             self.connectionErr.emit()
-        self.result.emit(numHits,ncbiDict)
+        self.result.emit(numHits,ncbiDict,acc2gi)
 
+class downloadNcbiFilesWorker(QObject):
+    start = pyqtSignal()
+    currentFile = pyqtSignal(str)
+    finished = pyqtSignal()
+    def __init__(self,idList,outputFolder):
+        self.idList = idList
+        self.outputFolder = outputFolder
+        super(downloadNcbiFilesWorker,self).__init__()
+    @pyqtSlot()
+    @pyqtSlot(str)
+    def run(self):
+        try:
+            ncbiFetch(self.idList, self.outputFolder,guiSignal=self.currentFile)
+            self.currentFile.emit("Successfully Downloaded All Files.")
+            self.finished.emit()
+        except Exception as e:
+            self.currentFile.emit("There was a Problem with the Download. \n Error: %s" % str(e))
+            self.finished.emit()
 
 class createDbWorker(QObject):
     start = pyqtSignal()
@@ -280,6 +298,11 @@ class runProcessSearchListOptionalHits(QObject):
                                                          self.totalHitsRequired,self.additionalBlastList,self.additionalHmmList)
         self.result.emit(filteredClusters)
 
+class downloadNcbiFilesWindow(QWidget,downloadNcbiFilesWin.Ui_downloadNcbiWin):
+    def __init__(self):
+        super(self.__class__,self).__init__()
+        self.setupUi(self)
+
 class addGeneWindow(QWidget,addGene.Ui_addGeneWindow):
     def __init__(self):
         super(self.__class__,self).__init__()
@@ -326,6 +349,8 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
 
         ##### Set up NCBI Interface
         self.ncbiDict = dict()
+        self.acc2gi = dict()
+        self.ncbiDLdict = dict()
 
         posIntValidator = QtGui.QIntValidator(0,1000000000)
 
@@ -340,6 +365,13 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.numEntries.setText('1000')
 
         self.searchNcbiBtn.clicked.connect(self.ncbiQuery)
+        self.addNcbiFilesBtn.clicked.connect(self.addNcbiFiles)
+        self.removeNcbiFilesBtn.clicked.connect(self.removeNcbiFiles)
+        self.selectNcbiFileDirBtn.clicked.connect(self.setNcbiFileDlDirectory)
+        self.dlNcbiFilesBtn.clicked.connect(self.downloadNcbiFiles)
+
+        self.searchFilter.editingFinished.connect(self.selectFilteredItems)
+        self.clearSearchSelectionBtn.clicked.connect(self.ncbiFileSearchResults.clearSelection)
 
         ### Set Up Parameters and Shared Data Structures
         self.nameToParamDict = {'blastEval': 1e-5, 'hmmEval': 1e-5, 'hmmScore': 30,
@@ -418,8 +450,8 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         keyword = self.ncbiKeyword.text()
         organism = self.ncbiOrganism.text()
         accession = self.ncbiAccession.text()
-        minLength = self.minLength.text()
-        maxLength = self.maxLength.text()
+        minLength = int(self.minLength.text())
+        maxLength = int(self.maxLength.text())
         retmax = self.numEntries.text()
 
         if not keyword and not organism and not accession:
@@ -443,6 +475,11 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             self.ncbiQueryWorker.moveToThread(self.runnerThread)
             self.ncbiQueryWorker.start.connect(self.ncbiQueryWorker.run)
             self.ncbiQueryWorker.start.emit()
+            ### Reset Search Results
+            self.ncbiFileSearchResults.clear()
+            self.ncbiDict = dict()
+            self.acc2gi = {k:v for k,v in self.acc2gi.items() if v in self.ncbiDLdict.keys()}
+            self.ncbiFileSearchResults.addItem('Querying NCBI Database...')
             self.ncbiQueryWorker.result.connect(self.updateSearchResults)
 
     def connectionError(self):
@@ -452,7 +489,8 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec()
 
-    def updateSearchResults(self,numHits,ncbiDict):
+    def updateSearchResults(self,numHits,ncbiDict,acc2gi):
+        self.ncbiFileSearchResults.takeItem(0)
         if numHits == 0:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
@@ -466,11 +504,104 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
 
+        self.totalSearchResults.setText(str(numHits))
         self.ncbiDict = ncbiDict
-
+        self.acc2gi = {**self.acc2gi,**acc2gi}
         for gi,entry in ncbiDict.items():
-            self.ncbiFileSearchResults.addItem("{}:{}".format(entry[1],entry[2]))
+            self.ncbiFileSearchResults.addItem("{}: {}".format(entry[1],entry[2]))
 
+    def selectFilteredItems(self):
+        selectedItems = self.ncbiFileSearchResults.findItems(self.searchFilter.text(),Qt.MatchContains)
+        print(x.text() for x in selectedItems)
+        for item in selectedItems:
+            item.setSelected(True)
+
+    def addNcbiFiles(self):
+        for ncbiFile in self.ncbiFileSearchResults.selectedItems():
+            acc = ncbiFile.text().split(':')[0].strip()
+            gi = self.acc2gi[acc]
+            if gi not in self.ncbiDLdict.keys():
+                self.ncbiDLdict[gi] = self.ncbiDict[gi]
+                self.ncbiFileDLlist.addItem(ncbiFile.text())
+        self.ncbiDLtotalFilesCt.setText(str(len(self.ncbiDLdict)))
+
+    def removeNcbiFiles(self):
+        for ncbiFile in self.ncbiFileDLlist.selectedItems():
+            acc = ncbiFile.text().split(':')[0].strip()
+            gi  = self.acc2gi[acc]
+            del self.ncbiDLdict[gi]
+            self.ncbiFileDLlist.takeItem(self.ncbiFileDLlist.row(ncbiFile))
+        self.ncbiDLtotalFilesCt.setText(str(len(self.ncbiDLdict)))
+
+    def setNcbiFileDlDirectory(self):
+        dirName = QFileDialog.getExistingDirectory()
+        if dirName:
+            if os.access(dirName, os.W_OK):
+               self.ncbiFileDlDir.setText(dirName)
+            else:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setText("Can't Write to that Folder. Please Specify Another Directory")
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec()
+
+    def downloadNcbiFiles(self):
+        ncbiFileDlDir = self.ncbiFileDlDir.text()
+        taskList = set(self.ncbiDLdict.keys())
+        if not ncbiFileDlDir:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("No Output Directory Specified")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+        elif len(taskList) == 0:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Nothing in Download List")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+        else:
+            alreadyDownloadedAcc = set(os.path.split(x)[1].split('.gbk')[0] for x in glob(os.path.join(ncbiFileDlDir,'*.gbk')))
+            alreadyDownloadedGI = set(self.acc2gi[acc] for acc in alreadyDownloadedAcc if acc in self.acc2gi.keys())
+            alreadyDlGIDict = {gi:self.ncbiDLdict[gi][1] for gi in alreadyDownloadedGI}
+            if self.verbose:
+                print(taskList,alreadyDownloadedGI,taskList&alreadyDownloadedGI)
+            if len(taskList&alreadyDownloadedGI) > 1:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Information)
+                msg.setText("Already Genbanks for the following Accession IDs {}. "
+                            "Skipping These.".format(', '.join(alreadyDlGIDict[gi] for gi in taskList&alreadyDownloadedGI)))
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec()
+            self.runnerThread = QThread()
+            self.runnerThread.start()
+            if self.verbose:
+                print(taskList-alreadyDownloadedGI)
+            self.downloadNcbiFilesWorker = downloadNcbiFilesWorker(list(taskList-alreadyDownloadedGI),ncbiFileDlDir)
+            self.downloadNcbiFilesWin = downloadNcbiFilesWindow()
+            self.downloadNcbiFilesWin.doneBtn.clicked.connect(self.downloadNcbiFilesWin.close)
+            self.downloadNcbiFilesWin.cancelBtn.clicked.connect(lambda: self.abortSearch(self.downloadNcbiFilesWin,self.runnerThread))
+            self.downloadNcbiFilesWin.progressBar.setMaximum(int(len(taskList-alreadyDownloadedGI)))
+            self.downloadNcbiFilesWin.progressBar.setValue(int(len(taskList&alreadyDownloadedGI)))
+            self.downloadNcbiFilesWorker.moveToThread(self.runnerThread)
+            self.downloadNcbiFilesWorker.start.connect(self.downloadNcbiFilesWorker.run)
+            self.downloadNcbiFilesWorker.currentFile.connect(self.updateCurrentFile)
+            self.downloadNcbiFilesWorker.finished.connect(self.ncbiFileDlFinished)
+            self.downloadNcbiFilesWorker.start.emit()
+
+            self.downloadNcbiFilesWin.show()
+
+    def updateCurrentFile(self,currentFile):
+        self.downloadNcbiFilesWin.currentTask.setText(currentFile)
+        self.downloadNcbiFilesWin.progressBar.setValue(self.downloadNcbiFilesWin.progressBar.value()+1)
+        self.downloadNcbiFilesWin.progressLabel.setText('{}/{}'.format(self.downloadNcbiFilesWin.progressBar.value(),
+                                                                      self.downloadNcbiFilesWin.progressBar.maximum()))
+    def ncbiFileDlFinished(self):
+        self.ncbiFileDLlist.clear()
+        self.ncbiDLdict = dict()
+        self.downloadNcbiFilesWin.doneBtn.setEnabled(True)
+        if self.runnerThread:
+            self.runnerThread.terminate()
 
     ###########################
     def showAddGeneWin(self):
@@ -633,9 +764,12 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             self.genbankList.takeItem(self.genbankList.row(gbkFile))
         self.totalFiles.setText(str(self.genbankList.count()))
     def chooseDBoutDir(self):
-        dirName = QFileDialog.getExistingDirectory()
+        dbName , _ = QFileDialog.getSaveFileName(caption="Specify Database Name",filter='*.fasta')
+        dirName,fileName = os.path.split(dbName)
+        if not fileName.endswith('.fasta'):
+            fileName += '.fasta'
         if dirName and os.access(dirName, os.W_OK):
-            self.dbOutputDir.setText(dirName)
+            self.dbOutputDir.setText(os.path.join(dirName,fileName))
         else:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
@@ -666,7 +800,8 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             self.createDbWorker = createDbWorker(taskList,dbPath)
             self.createDbStatusWin = createDbStatusWindow()
             self.createDbStatusWin.doneBtn.clicked.connect(self.createDbStatusWin.close)
-            self.createDbStatusWin.cancelBtn.clicked.connect(lambda: self.abortSearch(self.createDbStatusWin,self.runnerThread))
+            self.createDbStatusWin.cancelBtn.clicked.connect(lambda: self.abortSearch(self.createDbStatusWin,
+                                                                                      self.runnerThread))
             self.createDbStatusWin.progressBar.setMaximum(int(self.totalFiles.text()))
             self.createDbWorker.moveToThread(self.runnerThread)
             self.createDbWorker.start.connect(self.createDbWorker.run)
@@ -674,11 +809,12 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             self.createDbWorker.finished.connect(self.createDbSuccessful)
             self.createDbWorker.start.emit()
             self.createDbStatusWin.show()
+
     def updateCurrentGbk(self,currentGbk):
         self.createDbStatusWin.currentTask.setText(currentGbk)
         self.createDbStatusWin.progressBar.setValue(self.createDbStatusWin.progressBar.value()+1)
-        self.createDbStatusWin.percentLabel.setText(str("%.0f%%" % (100*self.createDbStatusWin.progressBar.value()
-                                                                    /int(self.totalFiles.text()))))
+        self.createDbStatusWin.percentLabel.setText("{}/{}".format(self.createDbStatusWin.progressBar.value(),
+                                                                   self.totalFiles.text()))
     def createDbSuccessful(self):
         self.genbankList.clear()
         self.createDbStatusWin.doneBtn.setEnabled(True)

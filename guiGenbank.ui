@@ -52,194 +52,24 @@
         <string>Prepare Database</string>
        </attribute>
        <layout class="QVBoxLayout" name="verticalLayout_4">
+        <property name="spacing">
+         <number>10</number>
+        </property>
         <item>
          <widget class="QToolBox" name="toolBox">
           <property name="currentIndex">
-           <number>1</number>
+           <number>2</number>
           </property>
-          <widget class="QWidget" name="filesDB">
-           <property name="geometry">
-            <rect>
-             <x>0</x>
-             <y>0</y>
-             <width>710</width>
-             <height>379</height>
-            </rect>
-           </property>
-           <attribute name="label">
-            <string>Make Database From Files</string>
-           </attribute>
-           <layout class="QVBoxLayout" name="verticalLayout">
-            <item>
-             <layout class="QHBoxLayout" name="horizontalLayout_3">
-              <item>
-               <widget class="QLabel" name="gbkPathLabel">
-                <property name="text">
-                 <string>Genbank Files Directory:</string>
-                </property>
-                <property name="textInteractionFlags">
-                 <set>Qt::NoTextInteraction</set>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QLineEdit" name="genbankDirPath">
-                <property name="readOnly">
-                 <bool>true</bool>
-                </property>
-                <property name="clearButtonEnabled">
-                 <bool>true</bool>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QPushButton" name="genbankDirBtn">
-                <property name="text">
-                 <string>Choose Directory</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QPushButton" name="addGenbankBtn">
-                <property name="text">
-                 <string>Add Genbanks to List</string>
-                </property>
-               </widget>
-              </item>
-             </layout>
-            </item>
-            <item>
-             <widget class="QListWidget" name="genbankList">
-              <property name="editTriggers">
-               <set>QAbstractItemView::NoEditTriggers</set>
-              </property>
-              <property name="selectionMode">
-               <enum>QAbstractItemView::ExtendedSelection</enum>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <layout class="QHBoxLayout" name="horizontalLayout_6">
-              <item>
-               <widget class="QLabel" name="label">
-                <property name="sizePolicy">
-                 <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
-                </property>
-                <property name="font">
-                 <font>
-                  <pointsize>14</pointsize>
-                  <weight>75</weight>
-                  <bold>true</bold>
-                 </font>
-                </property>
-                <property name="text">
-                 <string>Total Files to Process:</string>
-                </property>
-                <property name="textInteractionFlags">
-                 <set>Qt::NoTextInteraction</set>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QLabel" name="totalFiles">
-                <property name="font">
-                 <font>
-                  <pointsize>14</pointsize>
-                 </font>
-                </property>
-                <property name="text">
-                 <string>0</string>
-                </property>
-                <property name="textInteractionFlags">
-                 <set>Qt::NoTextInteraction</set>
-                </property>
-               </widget>
-              </item>
-             </layout>
-            </item>
-            <item>
-             <layout class="QHBoxLayout" name="horizontalLayout_4">
-              <property name="spacing">
-               <number>-1</number>
-              </property>
-              <item>
-               <widget class="QLabel" name="DatabasePathLabel">
-                <property name="text">
-                 <string>Database Output Path:</string>
-                </property>
-                <property name="textInteractionFlags">
-                 <set>Qt::NoTextInteraction</set>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QLineEdit" name="dbOutputDir">
-                <property name="readOnly">
-                 <bool>true</bool>
-                </property>
-                <property name="clearButtonEnabled">
-                 <bool>true</bool>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QPushButton" name="chooseDBoutputDirBtn">
-                <property name="text">
-                 <string>Choose Directory</string>
-                </property>
-               </widget>
-              </item>
-             </layout>
-            </item>
-            <item>
-             <layout class="QHBoxLayout" name="horizontalLayout_2">
-              <item alignment="Qt::AlignHCenter|Qt::AlignVCenter">
-               <widget class="QPushButton" name="deleteGenbankBtn">
-                <property name="sizePolicy">
-                 <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
-                </property>
-                <property name="text">
-                 <string>Remove from List</string>
-                </property>
-               </widget>
-              </item>
-              <item alignment="Qt::AlignHCenter|Qt::AlignVCenter">
-               <widget class="QPushButton" name="createDbBtn">
-                <property name="sizePolicy">
-                 <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
-                </property>
-                <property name="text">
-                 <string>Create Database</string>
-                </property>
-               </widget>
-              </item>
-             </layout>
-            </item>
-           </layout>
-           <zorder></zorder>
-           <zorder>genbankList</zorder>
-           <zorder>totalFiles</zorder>
-           <zorder>label</zorder>
-           <zorder></zorder>
-           <zorder></zorder>
-           <zorder></zorder>
-          </widget>
+          <property name="tabSpacing">
+           <number>5</number>
+          </property>
           <widget class="QWidget" name="ncbiDL">
            <property name="geometry">
             <rect>
              <x>0</x>
              <y>0</y>
              <width>710</width>
-             <height>379</height>
+             <height>394</height>
             </rect>
            </property>
            <attribute name="label">
@@ -287,6 +117,9 @@
                   <verstretch>0</verstretch>
                  </sizepolicy>
                 </property>
+                <property name="alignment">
+                 <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                </property>
                </widget>
               </item>
               <item>
@@ -309,6 +142,9 @@
                   <horstretch>0</horstretch>
                   <verstretch>0</verstretch>
                  </sizepolicy>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
                 </property>
                </widget>
               </item>
@@ -333,6 +169,9 @@
                   <verstretch>0</verstretch>
                  </sizepolicy>
                 </property>
+                <property name="alignment">
+                 <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                </property>
                </widget>
               </item>
               <item>
@@ -352,10 +191,13 @@
             </item>
             <item>
              <layout class="QHBoxLayout" name="horizontalLayout_22">
+              <property name="spacing">
+               <number>10</number>
+              </property>
               <item>
                <widget class="QLabel" name="label_15">
                 <property name="text">
-                 <string>Minimum Length: </string>
+                 <string>Min Length (bp): </string>
                 </property>
                </widget>
               </item>
@@ -364,12 +206,15 @@
                 <property name="inputMethodHints">
                  <set>Qt::ImhDigitsOnly|Qt::ImhFormattedNumbersOnly</set>
                 </property>
+                <property name="alignment">
+                 <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                </property>
                </widget>
               </item>
               <item>
                <widget class="QLabel" name="label_17">
                 <property name="text">
-                 <string>Maximum Length:</string>
+                 <string>Max Length (bp):</string>
                 </property>
                </widget>
               </item>
@@ -378,12 +223,15 @@
                 <property name="inputMethodHints">
                  <set>Qt::ImhDigitsOnly|Qt::ImhFormattedNumbersOnly</set>
                 </property>
+                <property name="alignment">
+                 <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                </property>
                </widget>
               </item>
               <item>
                <widget class="QLabel" name="label_18">
                 <property name="text">
-                 <string>Entries to Fetch (Max 1000):</string>
+                 <string>Number Entries (Max 1000):</string>
                 </property>
                </widget>
               </item>
@@ -391,6 +239,9 @@
                <widget class="QLineEdit" name="numEntries">
                 <property name="inputMethodHints">
                  <set>Qt::ImhDigitsOnly|Qt::ImhFormattedNumbersOnly</set>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
                 </property>
                 <property name="placeholderText">
                  <string/>
@@ -407,11 +258,21 @@
              </widget>
             </item>
             <item>
-             <widget class="QLabel" name="label_9">
-              <property name="text">
-               <string>Search Results:</string>
-              </property>
-             </widget>
+             <layout class="QHBoxLayout" name="horizontalLayout_24">
+              <item alignment="Qt::AlignLeft">
+               <widget class="QLabel" name="label_9">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="text">
+                 <string>Search Results:</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
             </item>
             <item>
              <widget class="Line" name="line_8">
@@ -422,6 +283,9 @@
             </item>
             <item>
              <layout class="QHBoxLayout" name="horizontalLayout_15">
+              <property name="spacing">
+               <number>5</number>
+              </property>
               <item>
                <widget class="QListWidget" name="ncbiFileSearchResults">
                 <property name="sizePolicy">
@@ -439,26 +303,115 @@
                </widget>
               </item>
               <item>
-               <widget class="QPushButton" name="selectGbFileBtn">
-                <property name="sizePolicy">
-                 <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
-                </property>
-                <property name="text">
-                 <string> Select  </string>
-                </property>
-               </widget>
+               <layout class="QVBoxLayout" name="verticalLayout_13">
+                <item>
+                 <widget class="QLabel" name="label_20">
+                  <property name="text">
+                   <string>Selection Filter:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QLineEdit" name="searchFilter">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="maximumSize">
+                   <size>
+                    <width>16777178</width>
+                    <height>16777215</height>
+                   </size>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="clearSearchSelectionBtn">
+                  <property name="text">
+                   <string>Clear Selection</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <layout class="QHBoxLayout" name="horizontalLayout_26">
+                  <item alignment="Qt::AlignHCenter|Qt::AlignBottom">
+                   <widget class="QLabel" name="label_19">
+                    <property name="sizePolicy">
+                     <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+                      <horstretch>0</horstretch>
+                      <verstretch>0</verstretch>
+                     </sizepolicy>
+                    </property>
+                    <property name="text">
+                     <string>Total Results:</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item alignment="Qt::AlignRight|Qt::AlignBottom">
+                   <widget class="QLabel" name="totalSearchResults">
+                    <property name="sizePolicy">
+                     <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                      <horstretch>0</horstretch>
+                      <verstretch>0</verstretch>
+                     </sizepolicy>
+                    </property>
+                    <property name="minimumSize">
+                     <size>
+                      <width>31</width>
+                      <height>0</height>
+                     </size>
+                    </property>
+                    <property name="maximumSize">
+                     <size>
+                      <width>16777215</width>
+                      <height>16777215</height>
+                     </size>
+                    </property>
+                    <property name="layoutDirection">
+                     <enum>Qt::LeftToRight</enum>
+                    </property>
+                    <property name="midLineWidth">
+                     <number>9</number>
+                    </property>
+                    <property name="text">
+                     <string>     0</string>
+                    </property>
+                    <property name="alignment">
+                     <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </item>
+                <item alignment="Qt::AlignHCenter|Qt::AlignBottom">
+                 <widget class="QPushButton" name="addNcbiFilesBtn">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="text">
+                   <string>Add to Download List</string>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
               </item>
              </layout>
             </item>
             <item>
-             <widget class="QLabel" name="label_10">
-              <property name="text">
-               <string>Entries to Download:</string>
-              </property>
-             </widget>
+             <layout class="QHBoxLayout" name="horizontalLayout_25">
+              <item>
+               <widget class="QLabel" name="label_10">
+                <property name="text">
+                 <string>Entries to Download:</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
             </item>
             <item>
              <widget class="Line" name="line_9">
@@ -469,8 +422,11 @@
             </item>
             <item>
              <layout class="QHBoxLayout" name="horizontalLayout_17">
+              <property name="spacing">
+               <number>20</number>
+              </property>
               <item>
-               <widget class="QListWidget" name="gbFileDLlist">
+               <widget class="QListWidget" name="ncbiFileDLlist">
                 <property name="sizePolicy">
                  <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
                   <horstretch>0</horstretch>
@@ -485,8 +441,8 @@
                 </property>
                </widget>
               </item>
-              <item>
-               <widget class="QPushButton" name="removeGbFileBtn">
+              <item alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+               <widget class="QPushButton" name="removeNcbiFilesBtn">
                 <property name="sizePolicy">
                  <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
                   <horstretch>0</horstretch>
@@ -519,7 +475,7 @@
                </widget>
               </item>
               <item>
-               <widget class="QLabel" name="GbDLtotalFiles">
+               <widget class="QLabel" name="ncbiDLtotalFilesCt">
                 <property name="text">
                  <string>0</string>
                 </property>
@@ -540,21 +496,21 @@
                </widget>
               </item>
               <item>
-               <widget class="QLineEdit" name="gbFileDLoutputDir">
+               <widget class="QLineEdit" name="ncbiFileDlDir">
                 <property name="readOnly">
                  <bool>true</bool>
                 </property>
                </widget>
               </item>
               <item>
-               <widget class="QPushButton" name="selectGbFileDirBtn">
+               <widget class="QPushButton" name="selectNcbiFileDirBtn">
                 <property name="text">
                  <string>Select</string>
                 </property>
                </widget>
               </item>
               <item>
-               <widget class="QPushButton" name="dlGbFileBtn">
+               <widget class="QPushButton" name="dlNcbiFilesBtn">
                 <property name="text">
                  <string>Download Files</string>
                 </property>
@@ -718,6 +674,13 @@
                   </item>
                  </layout>
                 </item>
+                <item>
+                 <widget class="QPushButton" name="pushButton">
+                  <property name="text">
+                   <string>Check Request</string>
+                  </property>
+                 </widget>
+                </item>
                </layout>
               </item>
              </layout>
@@ -769,6 +732,9 @@
               </item>
               <item>
                <widget class="QPushButton" name="dlGbDivGBtn">
+                <property name="enabled">
+                 <bool>false</bool>
+                </property>
                 <property name="sizePolicy">
                  <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
                   <horstretch>0</horstretch>
@@ -796,6 +762,182 @@
              </spacer>
             </item>
            </layout>
+          </widget>
+          <widget class="QWidget" name="filesDB">
+           <property name="geometry">
+            <rect>
+             <x>0</x>
+             <y>0</y>
+             <width>710</width>
+             <height>394</height>
+            </rect>
+           </property>
+           <attribute name="label">
+            <string>Make Database From Files</string>
+           </attribute>
+           <layout class="QVBoxLayout" name="verticalLayout">
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_3">
+              <item>
+               <widget class="QLabel" name="gbkPathLabel">
+                <property name="text">
+                 <string>Genbank Files Directory:</string>
+                </property>
+                <property name="textInteractionFlags">
+                 <set>Qt::NoTextInteraction</set>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLineEdit" name="genbankDirPath">
+                <property name="readOnly">
+                 <bool>true</bool>
+                </property>
+                <property name="clearButtonEnabled">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="genbankDirBtn">
+                <property name="text">
+                 <string>Choose Directory</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="addGenbankBtn">
+                <property name="text">
+                 <string>Add Genbanks to List</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <widget class="QListWidget" name="genbankList">
+              <property name="editTriggers">
+               <set>QAbstractItemView::NoEditTriggers</set>
+              </property>
+              <property name="selectionMode">
+               <enum>QAbstractItemView::ExtendedSelection</enum>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_6">
+              <item>
+               <widget class="QLabel" name="label">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="font">
+                 <font>
+                  <pointsize>14</pointsize>
+                  <weight>75</weight>
+                  <bold>true</bold>
+                 </font>
+                </property>
+                <property name="text">
+                 <string>Total Files to Process:</string>
+                </property>
+                <property name="textInteractionFlags">
+                 <set>Qt::NoTextInteraction</set>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="totalFiles">
+                <property name="font">
+                 <font>
+                  <pointsize>14</pointsize>
+                 </font>
+                </property>
+                <property name="text">
+                 <string>0</string>
+                </property>
+                <property name="textInteractionFlags">
+                 <set>Qt::NoTextInteraction</set>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_4">
+              <property name="spacing">
+               <number>-1</number>
+              </property>
+              <item>
+               <widget class="QLabel" name="DatabasePathLabel">
+                <property name="text">
+                 <string>Database Output Target:</string>
+                </property>
+                <property name="textInteractionFlags">
+                 <set>Qt::NoTextInteraction</set>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLineEdit" name="dbOutputDir">
+                <property name="readOnly">
+                 <bool>true</bool>
+                </property>
+                <property name="clearButtonEnabled">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="chooseDBoutputDirBtn">
+                <property name="text">
+                 <string>Save Database As</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_2">
+              <item alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+               <widget class="QPushButton" name="deleteGenbankBtn">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="text">
+                 <string>Remove from List</string>
+                </property>
+               </widget>
+              </item>
+              <item alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+               <widget class="QPushButton" name="createDbBtn">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="text">
+                 <string>Create Database</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+           </layout>
+           <zorder></zorder>
+           <zorder>genbankList</zorder>
+           <zorder>totalFiles</zorder>
+           <zorder>label</zorder>
+           <zorder></zorder>
+           <zorder></zorder>
+           <zorder></zorder>
           </widget>
          </widget>
         </item>
@@ -1360,6 +1502,70 @@
    </property>
   </action>
  </widget>
+ <tabstops>
+  <tabstop>genbankDirBtn</tabstop>
+  <tabstop>genbankDirPath</tabstop>
+  <tabstop>addGenbankBtn</tabstop>
+  <tabstop>tabWidget</tabstop>
+  <tabstop>genbankList</tabstop>
+  <tabstop>dbOutputDir</tabstop>
+  <tabstop>chooseDBoutputDirBtn</tabstop>
+  <tabstop>deleteGenbankBtn</tabstop>
+  <tabstop>createDbBtn</tabstop>
+  <tabstop>GeneFilePath</tabstop>
+  <tabstop>addGenefilePathBtn</tabstop>
+  <tabstop>addGenefileBtn</tabstop>
+  <tabstop>geneList</tabstop>
+  <tabstop>addGeneSeqBtn</tabstop>
+  <tabstop>addGeneBtn</tabstop>
+  <tabstop>clearGeneBtn</tabstop>
+  <tabstop>hmmFilePath</tabstop>
+  <tabstop>addHMMfilePathBtn</tabstop>
+  <tabstop>addHMMfilebtn</tabstop>
+  <tabstop>hmmList</tabstop>
+  <tabstop>addHMMbtn</tabstop>
+  <tabstop>clearHMMbtn</tabstop>
+  <tabstop>dataBaseSelector</tabstop>
+  <tabstop>searchList</tabstop>
+  <tabstop>removeSearchTermBtn</tabstop>
+  <tabstop>hitsNeededSpinBox</tabstop>
+  <tabstop>outputDirectorySelector</tabstop>
+  <tabstop>setParamsBtn</tabstop>
+  <tabstop>runSearch</tabstop>
+  <tabstop>closeBtn</tabstop>
+  <tabstop>ncbiKeyword</tabstop>
+  <tabstop>ncbiOrganism</tabstop>
+  <tabstop>ncbiAccession</tabstop>
+  <tabstop>searchNcbiBtn</tabstop>
+  <tabstop>ncbiFileSearchResults</tabstop>
+  <tabstop>addNcbiFilesBtn</tabstop>
+  <tabstop>ncbiFileDLlist</tabstop>
+  <tabstop>ncbiFileDlDir</tabstop>
+  <tabstop>selectNcbiFileDirBtn</tabstop>
+  <tabstop>removeNcbiFilesBtn</tabstop>
+  <tabstop>dlNcbiFilesBtn</tabstop>
+  <tabstop>bctChk</tabstop>
+  <tabstop>envChk</tabstop>
+  <tabstop>gssChk</tabstop>
+  <tabstop>htgChk</tabstop>
+  <tabstop>invChk</tabstop>
+  <tabstop>mamChk</tabstop>
+  <tabstop>patChk</tabstop>
+  <tabstop>plnChk</tabstop>
+  <tabstop>priChk</tabstop>
+  <tabstop>rodChk</tabstop>
+  <tabstop>stsChk</tabstop>
+  <tabstop>synChk</tabstop>
+  <tabstop>tsaChk</tabstop>
+  <tabstop>vrlChk</tabstop>
+  <tabstop>vrtChk</tabstop>
+  <tabstop>gbDivDLoutputDir</tabstop>
+  <tabstop>selectGbDivDirBtn</tabstop>
+  <tabstop>dlGbDivGBtn</tabstop>
+  <tabstop>minLength</tabstop>
+  <tabstop>maxLength</tabstop>
+  <tabstop>numEntries</tabstop>
+ </tabstops>
  <resources/>
  <connections/>
 </ui>

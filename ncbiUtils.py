@@ -36,6 +36,7 @@ def ncbiQuery(keyword,organism,accession,minLength=0,maxLength=10000000000,retma
 
 def ncbiSummary(idList,chunkSize = 250):
     ncbiDict = dict()
+    acc2gi = dict()
     idChunks = [idList[x:x+chunkSize] for x in range(0,len(idList),chunkSize)]
     for dataChunk in idChunks:
         esummaryURL ="http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=nuccore&" \
@@ -49,21 +50,23 @@ def ncbiSummary(idList,chunkSize = 250):
         for entry in parseRequest.findall('DocSum'):
             try:
                 gi = int(entry.find("*[@Name='Gi']").text)
-                acc = entry.find("*[@Name='Caption']").text
-                descr = entry.find("*[@Name='Title']").text
+                acc = entry.find("*[@Name='Caption']").text.strip()
+                descr = entry.find("*[@Name='Title']").text.strip()
                 ncbiDict[gi] = (gi,acc,descr)
+                acc2gi[acc] = gi
             except Exception as e:
                 print(gi,acc,descr,str(e))
                 pass
-    return ncbiDict
+    return ncbiDict,acc2gi
 
-def ncbiFetch(idList,outputFolder,chunkSize = 100,batchMode=True,ncbiDict={}):
+def ncbiFetch(idList,outputFolder,chunkSize = 100,batchMode=True,ncbiDict={},guiSignal=None):
     if batchMode:
         idChunks = [idList[x:x+chunkSize] for x in range(0,len(idList),chunkSize)]
         for dataChunk in idChunks:
+            print(dataChunk)
             fetchURL = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id={}" \
-                       "&retmode=text&rettype=gbwithparts&retmax=251&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(','.join(dataChunk))
-
+                       "&retmode=text&rettype=gbwithparts&retmax=251&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(','.join(str(gi) for gi in dataChunk))
+            print(fetchURL)
             ## from Eli Korvigo in biostars (https://www.biostars.org/p/66921/) modified because i'm using urllib
             def extract_records(records_handle):
                 buffer = []
@@ -71,11 +74,17 @@ def ncbiFetch(idList,outputFolder,chunkSize = 100,batchMode=True,ncbiDict={}):
                     line = line.decode()
                     if line.startswith("LOCUS") and buffer:
                         # yield accession number and record
-                        yield buffer[0].split()[1], "".join(buffer)
+                        currentAcc = buffer[0].split()[1]
+                        if guiSignal:
+                            guiSignal.emit(currentAcc)
+                        yield currentAcc, "".join(buffer)
                         buffer = [line]
                     else:
                         buffer.append(line)
-                yield buffer[0].split()[1], "".join(buffer)
+                currentAcc = buffer[0].split()[1]
+                if guiSignal:
+                    guiSignal.emit(currentAcc)
+                yield currentAcc, "".join(buffer)
 
             fetchReq = urllib.request.urlopen(fetchURL)
 
