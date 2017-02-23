@@ -1,6 +1,7 @@
 import urllib.request
 import xml.etree.ElementTree as etree
 import os,timeit
+import wget
 from ftplib import FTP
 
 def ncbiQuery(keyword,organism,accession,minLength=0,maxLength=10000000000,retmax=1000):
@@ -134,13 +135,26 @@ def ftp_connect(guiSignal=None):
     except:
       guiSignal.emit(False)
 
-# def getGbkDlList(ftpHandle,fileList,keyword):
-#     def filterList(line,keyword=keyword):
-#         if line.endswith('.gz') and keyword
+def getGbkDlList(keyword):
+
+    def filterList(line,fileList,keyword):
+        fileheader = 'gb' + keyword.lower()
+        fileheader.strip()
+        lineParse = line.split()
+        fileName  = lineParse[-1].strip()
+        if fileName.endswith('.gz') and fileName.startswith(fileheader):
+            estSize = float(lineParse[4])
+            fileList.append((fileName,estSize))
+    fileList = []
+    ftpHandle = ftp_connect()
+    ftpHandle.retrlines('LIST',callback=lambda x: filterList(x,fileList,keyword))
+
+    return fileList
+
 
 if __name__ == '__main__':
-    #l, idList = ncbiQuery('biosynthesis', 'Streptomyces', '')
-    #print(idList)
-    print(timeit.timeit("fetchSingle()", setup="from __main__ import fetchSingle", number=2))
-    print(timeit.timeit("fetchBatch()",setup="from __main__ import fetchBatch",number=2))
-
+    names,sizes = zip(*getGbkDlList('ENV'))
+    print(names,sum(sizes))
+    #print(sum(x[1] for x in test))
+    # dl = wget.download('ftp://ftp.ncbi.nlm.nih.gov/genbank/{}'.format(test[2][0]),test[0][0])
+   # print(dl)

@@ -675,7 +675,7 @@
                  </layout>
                 </item>
                 <item>
-                 <widget class="QPushButton" name="pushButton">
+                 <widget class="QPushButton" name="checkRequestBtn">
                   <property name="text">
                    <string>Check Request</string>
                   </property>

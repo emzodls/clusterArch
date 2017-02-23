@@ -28,11 +28,11 @@ from PyQt5 import QtGui
 from PyQt5.QtWidgets import (QApplication, QFileDialog, QMainWindow,
         QMessageBox,QCheckBox,QTableWidgetItem,QWidget,QListWidgetItem)
 from utils import parseSeqFile,parseHMMfile,generateInputFasta,generateHMMdb,MakeBlastDB,runBLAST,\
-    runHmmsearch,processSearchList,proccessGbks,processSearchListOptionalHits
+    runHmmsearch,processSearchList,proccessGbks,processSearchListOptionalHits,humanbytes
 from collections import Counter
 from glob import iglob,glob
 from itertools import chain
-from ncbiUtils import ncbiQuery,ncbiSummary,ncbiFetch
+from ncbiUtils import ncbiQuery,ncbiSummary,ncbiFetch,getGbkDlList
 
 import mainGuiNCBI,resultsWindow,status,parameters,sys,createDbStatus,addGene,downloadNcbiFilesWin
 
@@ -360,7 +360,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         super(self.__class__, self).__init__()
         self.setupUi(self)
 
-        ##### Set up NCBI Interface
+        ##### Set up NCBI File Interface
         self.ncbiDict = dict()
         self.acc2gi = dict()
         self.ncbiDLdict = dict()
@@ -385,7 +385,17 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
 
         self.searchFilter.editingFinished.connect(self.selectFilteredItems)
         self.clearSearchSelectionBtn.clicked.connect(self.ncbiFileSearchResults.clearSelection)
+        ####  Set up Genbank DB Interface ####
+        self.gbDivFilesToDlList = []
+        self.checkBoxList = [self.bctChk,self.envChk,self.gssChk,self.htgChk,self.invChk,self.mamChk,self.patChk,self.plnChk,
+                             self.priChk,self.rodChk,self.stsChk,self.synChk,self.tsaChk,self.vrlChk,self.vrtChk]
+        self.gbDivList = ['BCT','ENV','GSS','HTG','INV','MAM','PAT','PLN','PRI','ROD','STS','SYN','TSA','VRL','VRT']
 
+        self.checkRequestBtn.clicked.connect(self.checkGbDivDlRequest)
+
+        # when state of checkbox changes, force user to reestimate the download
+        for checkbox in self.checkBoxList:
+            checkbox.stateChanged.connect(self.redoGbDlEstimate)
         ### Set Up Parameters and Shared Data Structures
         self.nameToParamDict = {'blastEval': 1e-5, 'hmmEval': 1e-5, 'hmmScore': 30,
                                 'hmmDomLen': 15, 'windowSize': 50000}
@@ -458,7 +468,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.paramsWin.windowSize.textChanged.connect(self.activateApply)
         self.paramsWin.applyBtn.clicked.connect(self.updateParams)
         self.setParamsBtn.clicked.connect(self.showParamWindow)
-    ##### NCBI Query Functions #########
+    ##### NCBI File Query Functions #########
     def ncbiQuery(self):
         keyword = self.ncbiKeyword.text()
         organism = self.ncbiOrganism.text()
@@ -618,6 +628,28 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.downloadNcbiFilesWin.doneBtn.setEnabled(True)
         if self.runnerThread:
             self.runnerThread.terminate()
+    ### Genbank Download Functions #####
+    def redoGbDlEstimate(self):
+        self.checkRequestBtn.setEnabled(True)
+        self.totalFilesGbDiv.setText('TBD')
+        self.estSize.setText('TBD')
+        self.dlGbDivGBtn.setEnabled(False)
+    def checkGbDivDlRequest(self):
+        gbDivsToDl = [self.gbDivList[idx] for idx,checkbox in enumerate(self.checkBoxList) if checkbox.checkState() == 2]
+        self.gbDivFilesToDlList = []
+        totalSize = 0
+        if self.verbose:
+            print(gbDivsToDl)
+        for keyword in gbDivsToDl:
+            fileList,sizes = zip(*getGbkDlList(keyword))
+            if self.verbose:
+                print(fileList)
+            self.gbDivFilesToDlList.extend(fileList)
+            totalSize += sum(sizes)
+        self.totalFilesGbDiv.setText(str(len(self.gbDivFilesToDlList)))
+        self.estSize.setText(humanbytes(totalSize))
+        self.checkRequestBtn.setEnabled(False)
+        self.dlGbDivGBtn.setEnabled(True)
 
     ###########################
     def showAddGeneWin(self):
