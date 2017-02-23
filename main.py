@@ -181,14 +181,25 @@ class runBlastWorker(QObject):
         phrCheck = iglob(baseDir + '*phr')
         pinCheck = iglob(baseDir + '*pin')
         psqCheck = iglob(baseDir + '*psq')
+
+        outdirPhrCheck = iglob(os.path.join(self.outputDir,'*phr'))
+        outdirPinCheck = iglob(os.path.join(self.outputDir, '*pin'))
+        outdirPsqCheck = iglob(os.path.join(self.outputDir, '*psq'))
+
         ### Check for Blastp formatted Database
+        path, outputDBname = os.path.split(self.pathToDatabase)
+        ## BLAST formatted database is in database path
         if any(True for _ in phrCheck) and any(True for _ in pinCheck) and any(True for _ in psqCheck):
             self.makeDB.emit(False)
-            makeDBintl = False
+            dbInOutputFolder = False
+        ## BLAST formatted database is in output directory
+        elif any(True for _ in outdirPhrCheck) and any(True for _ in outdirPinCheck) and any(True for _ in outdirPsqCheck):
+            self.makeDB.emit(False)
+            dbInOutputFolder = True
         else:
             self.makeDB.emit(True)
-            makeDBintl = True
-            path, outputDBname = os.path.split(self.pathToDatabase)
+            dbInOutputFolder = True
+
             out, err, retcode = MakeBlastDB(self.makeblastdbExec, self.pathToDatabase, self.outputDir,outputDBname)
             if retcode != 0:
                 self.dbCreated.emit(False)
@@ -198,7 +209,8 @@ class runBlastWorker(QObject):
                 self.dbCreated.emit(True)
         ### Run Blastp
         inputFastas = os.path.join(self.outputDir, 'gene_queries.fa')
-        if makeDBintl:
+
+        if dbInOutputFolder:
             out, err, retcode = runBLAST(self.blastpExec, inputFastas, self.outputDir,
                                          os.path.join(self.outputDir, outputDBname),
                                          eValue=str(self.blastEval))
@@ -871,11 +883,11 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             if os.access(path, os.W_OK):
                 with open(totalFilePath, 'w') as stream:
                     writer = csv.writer(stream)
-                    rowData = [self.resultsWin.resultsList.horizontalHeaderItem(idx).text()
+                    rowData = [self.resultsWin.resultsList.horizontalHeaderItem(idx).text().strip()
                                for idx in range(self.resultsWin.resultsList.columnCount())]
                     writer.writerow(rowData)
                     for rowIdx in range(self.resultsWin.resultsList.rowCount()):
-                        rowData = [self.resultsWin.resultsList.item(rowIdx, colIdx).text()
+                        rowData = [self.resultsWin.resultsList.item(rowIdx, colIdx).text().strip()
                                    for colIdx in range(self.resultsWin.resultsList.columnCount())]
                         writer.writerow(rowData)
             else:

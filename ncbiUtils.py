@@ -1,6 +1,7 @@
 import urllib.request
 import xml.etree.ElementTree as etree
 import os,timeit
+from ftplib import FTP
 
 def ncbiQuery(keyword,organism,accession,minLength=0,maxLength=10000000000,retmax=1000):
     if not keyword and not organism and not accession:
@@ -111,6 +112,31 @@ def fetchSingle():
     idList = idList[:100]
     ncbiDict = ncbiSummary(idList, chunkSize=250)
     ncbiFetch(idList,'testFetch/',batchMode=False,ncbiDict=ncbiDict)
+### Functions from Marnix Modified
+def ftp_connect(guiSignal=None):
+  #Connect to NCBI FTP site and change to genbank directory
+  try:
+    ftp = FTP('ftp.ncbi.nlm.nih.gov')   # connect to host, default port
+    ftp.login()               # user anonymous, passwd anonymous@
+    ftp.cwd("genbank")
+    if guiSignal:
+        guiSignal.emit(True)
+    return ftp
+  except:
+    try:
+      ftp = FTP('bio-mirror.net')   # connect to host, default port
+      ftp.login()               # user anonymous, passwd anonymous@
+      ftp.cwd("biomirror")
+      ftp.cwd("genbank")
+      if guiSignal:
+          guiSignal.emit(True)
+      return ftp
+    except:
+      guiSignal.emit(False)
+
+# def getGbkDlList(ftpHandle,fileList,keyword):
+#     def filterList(line,keyword=keyword):
+#         if line.endswith('.gz') and keyword
 
 if __name__ == '__main__':
     #l, idList = ncbiQuery('biosynthesis', 'Streptomyces', '')
