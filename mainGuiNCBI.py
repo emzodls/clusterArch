@@ -648,7 +648,7 @@ class Ui_clusterArch(object):
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.hmmList.sizePolicy().hasHeightForWidth())
         self.hmmList.setSizePolicy(sizePolicy)
-        self.hmmList.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.hmmList.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
         self.hmmList.setObjectName("hmmList")
         self.horizontalLayout_12.addWidget(self.hmmList)
         self.verticalLayout_8 = QtWidgets.QVBoxLayout()
@@ -841,7 +841,7 @@ class Ui_clusterArch(object):
 
         self.retranslateUi(clusterArch)
         self.tabWidget.setCurrentIndex(0)
-        self.toolBox.setCurrentIndex(2)
+        self.toolBox.setCurrentIndex(0)
         self.toolBox.layout().setSpacing(5)
         self.dataBaseSelector.setCurrentIndex(-1)
         self.outputDirectorySelector.setCurrentIndex(-1)
