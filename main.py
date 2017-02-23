@@ -56,9 +56,10 @@ class ncbiQueryWorker(QObject):
             numHits, ncbiIDsList = ncbiQuery(self.keyword,self.organism,self.accession,
                                              self.minLength,self.maxLength,self.retmax)
             ncbiDict,acc2gi = ncbiSummary(ncbiIDsList, chunkSize=250)
+            self.result.emit(numHits, ncbiDict, acc2gi)
         except:
             self.connectionErr.emit()
-        self.result.emit(numHits,ncbiDict,acc2gi)
+
 
 class downloadNcbiFilesWorker(QObject):
     start = pyqtSignal()
