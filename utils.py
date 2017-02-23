@@ -128,7 +128,6 @@ def MakeBlastDB(makeblastdbExec,dbPath,outputDir,outDBName):
     if platform.system() == 'Windows':
         dbPath = get_short_path_name(dbPath)
         outputDir = get_short_path_name(outputDir)
-
     command = [makeblastdbExec, '-in', dbPath, '-dbtype', "prot",'-out',os.path.join(outputDir,outDBName)]
     out, err, retcode = execute(command)
     if retcode != 0:
@@ -171,9 +170,15 @@ def generateInputFasta(forBLAST,outputDir):
 def generateHMMdb(hmmFetchExec,hmmDict,hmmSet,outputDir):
     errFlag = False
     failedToFetch = set()
+    if platform.system() == 'Windows':
+        outputDir = get_short_path_name(outputDir)
     with open(os.path.join('%s' % outputDir,'hmmDB.hmm'),'wb') as outfile:
         for hmm in hmmSet:
-            out, err, retcode = execute([hmmFetchExec, hmmDict[hmm], hmm])
+            if platform.system() == 'Windows':
+                hmmSource = get_short_path_name(hmmDict[hmm])
+            else:
+                hmmSource = hmmDict[hmm]
+            out, err, retcode = execute([hmmFetchExec, hmmSource, hmm])
             if retcode == 0:
                 outfile.write(out)
             else:

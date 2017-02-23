@@ -521,6 +521,8 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.acc2gi = {**self.acc2gi,**acc2gi}
         for gi,entry in ncbiDict.items():
             self.ncbiFileSearchResults.addItem("{}: {}".format(entry[1],entry[2]))
+        if self.runnerThread:
+            self.runnerThread.terminate()
 
     def selectFilteredItems(self):
         selectedItems = self.ncbiFileSearchResults.findItems(self.searchFilter.text(),Qt.MatchContains)
@@ -585,7 +587,8 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                             "Skipping These.".format(', '.join(alreadyDlGIDict[gi] for gi in taskList&alreadyDownloadedGI)))
                 msg.setStandardButtons(QMessageBox.Ok)
                 msg.exec()
-            self.runnerThread = QThread()
+            if not self.runnerThread:
+                self.runnerThread = QThread()
             self.runnerThread.start()
             if self.verbose:
                 print(taskList-alreadyDownloadedGI)
@@ -1003,7 +1006,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                     self.blastWorker.doneBLAST.connect(lambda x: self.doneBLAST(x, self.statusWin))
                     if not self.runnerThread:
                         self.runnerThread = QThread()
-                        self.runnerThread.start()
+                    self.runnerThread.start()
                     self.blastWorker.moveToThread(self.runnerThread)
                     self.blastWorker.start.connect(self.blastWorker.run)
                     self.blastWorker.start.emit()
@@ -1098,7 +1101,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                     self.hmmerWorker.hmmSearchComplete.connect(lambda x: self.hmmSuccessCheck(x, self.statusWin))
                     if not self.runnerThread:
                         self.runnerThread = QThread()
-                        self.runnerThread.start()
+                    self.runnerThread.start()
                     self.hmmerWorker.moveToThread(self.runnerThread)
                     self.hmmerWorker.start.connect(self.hmmerWorker.run)
                     self.hmmerWorker.start.emit()
@@ -1232,7 +1235,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                                          '5/6', 5)
                 if not self.runnerThread:
                     self.runnerThread = QThread()
-                    self.runnerThread.start()
+                self.runnerThread.start()
                 if self.totalHitsRequired == len(requiredBlastList) + len(requiredHmmList) :
                     self.processSearchListWorker = runProcessSearchList(requiredBlastList, requiredHmmList, blastOutFile, hmmOutFile,
                                                                         self.nameToParamDict['hmmScore'],
@@ -1334,7 +1337,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                                          '5/6', 5)
                 if not self.runnerThread:
                     self.runnerThread = QThread()
-                    self.runnerThread.start()
+                self.runnerThread.start()
                 self.processSearchListWorker = runProcessSearchList(blastList, hmmList, blastOutFile, hmmOutFile,
                                                                     self.nameToParamDict['hmmScore'],
                                                                     self.nameToParamDict['hmmDomLen'],
