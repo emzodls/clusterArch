@@ -521,6 +521,14 @@
            </layout>
           </widget>
           <widget class="QWidget" name="ncbiDiv">
+           <property name="geometry">
+            <rect>
+             <x>0</x>
+             <y>0</y>
+             <width>710</width>
+             <height>394</height>
+            </rect>
+           </property>
            <attribute name="label">
             <string>Make Database from Genbank Divisions</string>
            </attribute>
@@ -731,7 +739,7 @@
                </widget>
               </item>
               <item>
-               <widget class="QPushButton" name="dlGbDivGBtn">
+               <widget class="QPushButton" name="downloadGbDivFileBtn">
                 <property name="enabled">
                  <bool>false</bool>
                 </property>
@@ -933,8 +941,6 @@
            </layout>
            <zorder></zorder>
            <zorder>genbankList</zorder>
-           <zorder>totalFiles</zorder>
-           <zorder>label</zorder>
            <zorder></zorder>
            <zorder></zorder>
            <zorder></zorder>
@@ -1561,7 +1567,7 @@
   <tabstop>vrtChk</tabstop>
   <tabstop>gbDivDLoutputDir</tabstop>
   <tabstop>selectGbDivDirBtn</tabstop>
-  <tabstop>dlGbDivGBtn</tabstop>
+  <tabstop>downloadGbDivFileBtn</tabstop>
   <tabstop>minLength</tabstop>
   <tabstop>maxLength</tabstop>
   <tabstop>numEntries</tabstop>

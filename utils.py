@@ -27,6 +27,8 @@ from Bio.Alphabet import generic_protein
 from clusterTools import clusterAnalysis
 from random import random
 import sys,subprocess,os,platform
+import gzip
+
 ### To fix the file paths in windows ###
 # from http://stackoverflow.com/questions/23598289/how-to-get-windows-short-file-name-in-python
 if platform.system() == 'Windows':
@@ -128,6 +130,7 @@ def MakeBlastDB(makeblastdbExec,dbPath,outputDir,outDBName):
     if platform.system() == 'Windows':
         dbPath = get_short_path_name(dbPath)
         outputDir = get_short_path_name(outputDir)
+    print(os.getcwd())
     command = [makeblastdbExec, '-in', dbPath, '-dbtype', "prot",'-out',os.path.join(outputDir,outDBName)]
     out, err, retcode = execute(command)
     if retcode != 0:
@@ -293,6 +296,95 @@ def processSearchListProt(blastList,hmmList,blastOutFile,hmmOutFile,windowSize =
                 {hitQuery:[(protein.name,protein.idx,protein) for protein in (hitSet & clusterProts)] for hitQuery,hitSet in hitDict.items()}
     return filteredClusters
 
+def processGbkDivFile(gbkDivFile,database,guiSignal=None):
+    ## unzip gbkDivFile
+    try:
+        genbankHandle = SeqIO.parse(gzip.open(gbkDivFile,mode='rt'),'genbank')
+        cds_ctr = 0
+        entryIDlist = set()
+        entryCtr = 1
+        for genbankEntry in genbankHandle:
+            genesToWrite = []
+            species_id = genbankEntry.name
+            # Make sure there are no collisions in dictionary
+            if species_id in entryIDlist:
+                species_id = '{}.clusterTools{}'.format(species_id,entryCtr)
+                entryCtr += 1
+            entryIDlist.add(species_id)
+            CDS_list = (feature for feature in genbankEntry.features if feature.type == 'CDS')
+            if guiSignal:
+                guiSignal.emit(species_id)
+            for CDS in CDS_list:
+                cds_ctr += 1
+                direction = CDS.location.strand
+                internal_id = "%s_CDS_%.5i".format(species_id, cds_ctr)
+                protein_id = internal_id
+                # Ensure that you don't get negative values, Biopython parser will not ignore slices that are greater
+                # than the entry so you don't need to worry about the other direction
+                internal_id = "%s_CDS_%.5i" % (species_id, cds_ctr)
+                protein_id = internal_id
+
+                gene_start = max(0, CDS.location.nofuzzy_start)
+                gene_end = max(0, CDS.location.nofuzzy_end)
+                # Try to find a common name for the promoter, otherwise just use the internal ID
+                if 'protein_id' in CDS.qualifiers.keys():
+                    protein_id = CDS.qualifiers['protein_id'][0]
+                elif 'locus_tag' in CDS.qualifiers.keys():
+                    protein_id = CDS.qualifiers['protein_id'][0]
+
+                if 'translation' in CDS.qualifiers.keys():
+                    prot_seq = Seq(CDS.qualifiers['translation'][0])
+                    if direction == 1:
+                        direction_id = '+'
+                    else:
+                        direction_id = '-'
+                else:
+                    genbank_seq = CDS.location.extract(genbankEntry)
+                    if protein_id == internal_id:
+                        for feature in genbank_seq.features:
+                            if 'locus_tag' in feature.qualifiers:
+                                protein_id = feature.qualifiers['locus_tag'][0]
+                    nt_seq = genbank_seq.seq
+                    if direction == 1:
+                        direction_id = '+'
+                        # for protein sequence if it is at the start of the entry assume that end of sequence is in frame
+                        # if it is at the end of the genbank entry assume that the start of the sequence is in frame
+                        if gene_start == 0:
+                            if len(nt_seq) % 3 == 0:
+                                prot_seq = nt_seq.translate()
+                            elif len(nt_seq) % 3 == 1:
+                                prot_seq = nt_seq[1:].translate()
+                            else:
+                                prot_seq = nt_seq[2:].translate()
+                        else:
+                            prot_seq = nt_seq.translate()
+                    if direction == -1:
+                        direction_id = '-'
+                        nt_seq = genbank_seq.seq
+                        if gene_start == 0:
+                            prot_seq = nt_seq.translate()
+                        else:
+                            if len(nt_seq) % 3 == 0:
+                                prot_seq = nt_seq.translate()
+                            elif len(nt_seq) % 3 == 1:
+                                prot_seq = nt_seq[:-1].translate()
+                            else:
+                                prot_seq = nt_seq[:-2].reverse_complement().translate()
+                # Write protein file
+                if len(prot_seq) > 0 and '*' not in prot_seq[:-1]:
+                    prot_entry = SeqRecord(prot_seq, id='%s|%i-%i|%s|%s|%s' % (species_id, gene_start + 1,
+                                                                               gene_end, direction_id,
+                                                                               internal_id, protein_id),
+                                           description='%s in %s' % (protein_id, species_id))
+                    genesToWrite.append(prot_entry)
+            with open(database,'a') as outfileHandle:
+                SeqIO.write(genesToWrite,outfileHandle,'fasta')
+        return entryIDlist
+    except Exception as e:
+        print(e)
+        if guiSignal:
+            guiSignal.emit('Failed')
+        return
 def proccessGbks(taskList,outputDir,signal):
     # make sure species list is unique
     speciesList = set()
@@ -407,3 +499,6 @@ def humanbytes(B):
       return '{0:.2f} GB'.format(B/GB)
    elif TB <= B:
       return '{0:.2f} TB'.format(B/TB)
+
+if __name__ == "__main__":
+    print(len(processGbkDivFile('/Users/emzodls/Downloads/gbbct1.seq.gz','/Users/emzodls/Downloads/testCluterTools.fasta')))

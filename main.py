@@ -28,13 +28,13 @@ from PyQt5 import QtGui
 from PyQt5.QtWidgets import (QApplication, QFileDialog, QMainWindow,
         QMessageBox,QCheckBox,QTableWidgetItem,QWidget,QListWidgetItem)
 from utils import parseSeqFile,parseHMMfile,generateInputFasta,generateHMMdb,MakeBlastDB,runBLAST,\
-    runHmmsearch,processSearchList,proccessGbks,processSearchListOptionalHits,humanbytes
+    runHmmsearch,processSearchList,proccessGbks,processSearchListOptionalHits,humanbytes,processGbkDivFile
 from collections import Counter
 from glob import iglob,glob
 from itertools import chain
 from ncbiUtils import ncbiQuery,ncbiSummary,ncbiFetch,getGbkDlList
 
-import mainGuiNCBI,resultsWindow,status,parameters,sys,createDbStatus,addGene,downloadNcbiFilesWin
+import mainGuiNCBI,resultsWindow,status,parameters,sys,createDbStatus,addGene,downloadNcbiFilesWin,wget
 
 class ncbiQueryWorker(QObject):
     start = pyqtSignal()
@@ -60,7 +60,6 @@ class ncbiQueryWorker(QObject):
         except:
             self.connectionErr.emit()
 
-
 class downloadNcbiFilesWorker(QObject):
     start = pyqtSignal()
     currentFile = pyqtSignal(str)
@@ -79,6 +78,70 @@ class downloadNcbiFilesWorker(QObject):
         except Exception as e:
             self.currentFile.emit("There was a Problem with the Download. \n Error: %s" % str(e))
             self.finished.emit()
+
+class downloadGbDivFilesWorker(QObject):
+    start = pyqtSignal()
+    currentFile = pyqtSignal(str)
+    finished = pyqtSignal(list)
+    def __init__(self,filelist,outputFolder):
+        self.filelist = filelist
+        self.outputFolder = outputFolder
+        self.failedToFetch = []
+        super(downloadGbDivFilesWorker,self).__init__()
+    @pyqtSlot()
+    @pyqtSlot(str)
+    @pyqtSlot(list)
+    def run(self):
+        for gbkDivFile in self.filelist:
+            try:
+                self.currentFile.emit(gbkDivFile)
+                wget.download('ftp://ftp.ncbi.nlm.nih.gov/genbank/{}'.format(gbkDivFile),
+                              os.path.join(self.outputFolder,'{}.clusterToolsDB'.format(gbkDivFile)), False)
+            # if it fails try mirror
+            except:
+                try:
+                    self.currentFile.emit(gbkDivFile)
+                    wget.download('ftp://bio-mirror.net/biomirror/genbank/{}'.format(gbkDivFile),
+                                  os.path.join(self.outputFolder, '{}.clusterToolsDB'.format(gbkDivFile)), False)
+                except:
+                    self.failedToFetch.append(gbkDivFile)
+                    pass
+        self.finished.emit(self.failedToFetch)
+
+class processGbDivFilesWorker(QObject):
+    start = pyqtSignal()
+    currentFile = pyqtSignal(str)
+    currentSpecies = pyqtSignal(str)
+    finished = pyqtSignal(list)
+
+    def __init__(self,filelist,targetfolder):
+        self.filelist = filelist
+        self.targetfolder = targetfolder
+        self.failedToProcess = []
+        super(processGbDivFilesWorker,self).__init__()
+    @pyqtSlot()
+    @pyqtSlot(str)
+    @pyqtSlot(list)
+    def run(self):
+        for gbkDivFile in self.filelist:
+            try:
+                print(gbkDivFile)
+                path,gbkFileName = os.path.split(gbkDivFile)
+                self.currentFile.emit(gbkFileName)
+                database = os.path.join(self.targetfolder,'{}.clusterTools.fasta'.format(gbkDivFile))
+                processGbkDivFile(gbkDivFile,database,self.currentSpecies)
+                os.remove(gbkDivFile)
+            except Exception as e:
+                print(e)
+                self.failedToProcess.append(gbkFileName)
+                pass
+        clusterToolsFastaFiles = glob(os.path.join(self.targetfolder,'*.clusterTools.fasta'))
+        with open(os.path.join(self.targetfolder,'gbDivDB.clusterTools.fasta'), 'a') as outfile:
+            for clusterToolsFastaFile in clusterToolsFastaFiles:
+                with open(clusterToolsFastaFile) as infile:
+                    for line in infile:
+                        outfile.write(line)
+        self.finished.emit(self.failedToProcess)
 
 class createDbWorker(QObject):
     start = pyqtSignal()
@@ -392,7 +455,8 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.gbDivList = ['BCT','ENV','GSS','HTG','INV','MAM','PAT','PLN','PRI','ROD','STS','SYN','TSA','VRL','VRT']
 
         self.checkRequestBtn.clicked.connect(self.checkGbDivDlRequest)
-
+        self.selectGbDivDirBtn.clicked.connect(self.selectGbDivDir)
+        self.downloadGbDivFileBtn.clicked.connect(self.downloadGenbankDivFiles)
         # when state of checkbox changes, force user to reestimate the download
         for checkbox in self.checkBoxList:
             checkbox.stateChanged.connect(self.redoGbDlEstimate)
@@ -406,6 +470,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.forHmmer = dict()
         self.pathToDatabase = ''
         self.outputDir  = ''
+        self.runnerThread = None
 
         self.makeblastdbExec = makeblastdbExec
         self.blastExec = blastExec
@@ -537,7 +602,6 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
 
     def selectFilteredItems(self):
         selectedItems = self.ncbiFileSearchResults.findItems(self.searchFilter.text(),Qt.MatchContains)
-        print(x.text() for x in selectedItems)
         for item in selectedItems:
             item.setSelected(True)
 
@@ -608,7 +672,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             self.downloadNcbiFilesWin.doneBtn.clicked.connect(self.downloadNcbiFilesWin.close)
             self.downloadNcbiFilesWin.cancelBtn.clicked.connect(lambda: self.abortSearch(self.downloadNcbiFilesWin,self.runnerThread))
             self.downloadNcbiFilesWin.progressBar.setMaximum(int(len(taskList-alreadyDownloadedGI)))
-            self.downloadNcbiFilesWin.progressBar.setValue(int(len(taskList&alreadyDownloadedGI)))
+            self.downloadNcbiFilesWin.progressBar.setValue(0)
             self.downloadNcbiFilesWorker.moveToThread(self.runnerThread)
             self.downloadNcbiFilesWorker.start.connect(self.downloadNcbiFilesWorker.run)
             self.downloadNcbiFilesWorker.currentFile.connect(self.updateCurrentFile)
@@ -633,7 +697,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.checkRequestBtn.setEnabled(True)
         self.totalFilesGbDiv.setText('TBD')
         self.estSize.setText('TBD')
-        self.dlGbDivGBtn.setEnabled(False)
+        self.downloadGbDivFileBtn.setEnabled(False)
     def checkGbDivDlRequest(self):
         gbDivsToDl = [self.gbDivList[idx] for idx,checkbox in enumerate(self.checkBoxList) if checkbox.checkState() == 2]
         self.gbDivFilesToDlList = []
@@ -649,7 +713,115 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.totalFilesGbDiv.setText(str(len(self.gbDivFilesToDlList)))
         self.estSize.setText(humanbytes(totalSize))
         self.checkRequestBtn.setEnabled(False)
-        self.dlGbDivGBtn.setEnabled(True)
+        self.downloadGbDivFileBtn.setEnabled(True)
+    def selectGbDivDir(self):
+        dirName = QFileDialog.getExistingDirectory()
+        if dirName:
+            if os.access(dirName, os.W_OK):
+               self.gbDivDLoutputDir.setText(dirName)
+            else:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setText("Can't Write to that Folder. Please Specify Another Directory")
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec()
+    # will ignore files of a similar name that were already downloaded
+    def downloadGenbankDivFiles(self):
+        gbDivFileDir = self.gbDivDLoutputDir.text()
+        tasklist = set(x + '.clusterToolsDB' for x in self.gbDivFilesToDlList)
+        if not gbDivFileDir:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("No Output Directory Specified")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+        elif len(tasklist) == 0:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Nothing in Download List")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+        else:
+            alreadyDownloaded = set(os.listdir(gbDivFileDir))
+            targetlist = [x.split('.clusterToolsDB')[0] for x in tasklist-alreadyDownloaded]
+            if self.verbose:
+                print(targetlist)
+            if not self.runnerThread:
+                self.runnerThread = QThread()
+            self.runnerThread.start()
+            self.genbankDivFilesStatusWin = downloadNcbiFilesWindow()
+
+            self.downloadGbDivFilesWorker = downloadGbDivFilesWorker(targetlist,gbDivFileDir)
+            self.genbankDivFilesStatusWin.doneBtn.clicked.connect(self.genbankDivFilesStatusWin.close)
+
+            self.genbankDivFilesStatusWin.cancelBtn.clicked.connect(
+                lambda: self.abortSearch(self.genbankDivFilesStatusWin, self.runnerThread))
+
+            self.genbankDivFilesStatusWin.progressBar.setMaximum(int(len(tasklist - alreadyDownloaded)))
+            self.genbankDivFilesStatusWin.progressBar.setValue(0)
+            self.genbankDivFilesStatusWin.show()
+            self.downloadGbDivFilesWorker.moveToThread(self.runnerThread)
+            self.downloadGbDivFilesWorker.start.connect(self.downloadGbDivFilesWorker.run)
+            self.downloadGbDivFilesWorker.currentFile.connect(self.updateCurrentGbDlFile)
+            self.downloadGbDivFilesWorker.finished.connect(lambda x: self.gbDivFileDlFinished(x,gbDivFileDir))
+            self.downloadGbDivFilesWorker.start.emit()
+
+    def gbDivFileDlFinished(self,dlFailedList,targetDir):
+        if dlFailedList:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setText("Failed to Download Some Files: {}\n"
+                        "Proceeding with DB Creation With Downloaded Files".format('\n'.join(dlFailedList)))
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+
+        filesToProcess = glob(os.path.join(targetDir,'*.gz.clusterToolsDB'))
+        if self.verbose:
+            print(filesToProcess)
+        self.genbankDivFilesStatusWin.title.setText('Processing Genbank Division File:')
+        self.genbankDivFilesStatusWin.currentTask.setText(' : ')
+        self.genbankDivFilesStatusWin.progressBar.setMaximum(int(len(filesToProcess)))
+        self.genbankDivFilesStatusWin.progressBar.setValue(0)
+
+        if not self.runnerThread:
+            self.runnerThread = QThread()
+        self.runnerThread.start()
+        self.processGbDivFilesWorker = processGbDivFilesWorker(filesToProcess,targetDir)
+        self.processGbDivFilesWorker.moveToThread(self.runnerThread)
+        self.processGbDivFilesWorker.start.connect(self.processGbDivFilesWorker.run)
+        self.processGbDivFilesWorker.currentFile.connect(self.updateGbProcessFile)
+        self.processGbDivFilesWorker.currentSpecies.connect(self.updateGbProcessSpecies)
+        self.processGbDivFilesWorker.finished.connect(lambda x: self.gbProcessFileFinished(x,dlFailedList))
+        self.processGbDivFilesWorker.start.emit()
+
+    def updateCurrentGbDlFile(self,currentFile):
+        self.genbankDivFilesStatusWin.currentTask.setText(currentFile)
+        self.genbankDivFilesStatusWin.progressBar.setValue(self.genbankDivFilesStatusWin.progressBar.value() + 1)
+        self.genbankDivFilesStatusWin.progressLabel.setText('{}/{}'.format(self.genbankDivFilesStatusWin.progressBar.value(),
+                                                                       self.genbankDivFilesStatusWin.progressBar.maximum()))
+
+    def updateGbProcessFile(self,currentFile):
+        self.genbankDivFilesStatusWin.currentTask.setText('{} : {}'.format(currentFile,' '))
+        self.genbankDivFilesStatusWin.progressBar.setValue(self.genbankDivFilesStatusWin.progressBar.value()+1)
+        self.genbankDivFilesStatusWin.progressLabel.setText('{}/{}'.format(self.genbankDivFilesStatusWin.progressBar.value(),
+                                                                      self.genbankDivFilesStatusWin.progressBar.maximum()))
+
+    def updateGbProcessSpecies(self,currentSpecies):
+        gbkFile, gbkSpecies = self.genbankDivFilesStatusWin.currentTask.text().split(' : ')
+        self.genbankDivFilesStatusWin.currentTask.setText('{} : {}'.format(gbkFile,currentSpecies))
+
+    def gbProcessFileFinished(self,processFailed,dlFailed):
+        self.genbankDivFilesStatusWin.title.setText('Database Completed!')
+        self.genbankDivFilesStatusWin.doneBtn.setEnabled(True)
+        failedFiles = ''
+        if dlFailed:
+            failedFiles += 'Failed to Download: {}\n'.format('\n'.join(dlFailed))
+        if processFailed:
+            failedFiles += 'Failed to Process: {}'.format('\n'.join(processFailed))
+        if failedFiles:
+            self.genbankDivFilesStatusWin.currentTask.setText(failedFiles)
+        if self.runnerThread:
+            self.runnerThread.terminate()
 
     ###########################
     def showAddGeneWin(self):
@@ -813,17 +985,18 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.totalFiles.setText(str(self.genbankList.count()))
     def chooseDBoutDir(self):
         dbName , _ = QFileDialog.getSaveFileName(caption="Specify Database Name",filter='*.fasta')
-        dirName,fileName = os.path.split(dbName)
-        if not fileName.endswith('.fasta'):
-            fileName += '.fasta'
-        if dirName and os.access(dirName, os.W_OK):
-            self.dbOutputDir.setText(os.path.join(dirName,fileName))
-        else:
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
-            msg.setText("Can't Write to that Folder")
-            msg.setStandardButtons(QMessageBox.Ok)
-            msg.exec()
+        if dbName:
+            dirName,fileName = os.path.split(dbName)
+            if not fileName.endswith('.fasta'):
+                fileName += '.fasta'
+            if dirName and os.access(dirName, os.W_OK):
+                self.dbOutputDir.setText(os.path.join(dirName,fileName))
+            else:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setText("Can't Write to that Folder")
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec()
     def createDB(self):
         dbPath = self.dbOutputDir.text()
         taskList = [genbankFile.text() for genbankFile in (self.genbankList.item(x) for x in range(self.genbankList.count()))]
