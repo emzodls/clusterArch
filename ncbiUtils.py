@@ -151,6 +151,10 @@ def getGbkDlList(keyword):
 
     return fileList
 
+# def parseAssemblyReportFile(division):
+#     try:
+#         fileHandle =
+
 
 if __name__ == '__main__':
     names,sizes = zip(*getGbkDlList('ENV'))

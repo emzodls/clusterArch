@@ -34,7 +34,7 @@ from glob import iglob,glob
 from itertools import chain
 from ncbiUtils import ncbiQuery,ncbiSummary,ncbiFetch,getGbkDlList
 
-import mainGuiNCBI,resultsWindow,status,parameters,sys,createDbStatus,addGene,downloadNcbiFilesWin,wget
+import mainGuiNCBI,resultsWindow,status,parameters,sys,createDbStatus,addGene,downloadNcbiFilesWin,gbDivSumWin, wget
 
 class ncbiQueryWorker(QObject):
     start = pyqtSignal()
@@ -123,24 +123,28 @@ class processGbDivFilesWorker(QObject):
     @pyqtSlot(str)
     @pyqtSlot(list)
     def run(self):
+        clusterToolsFastaFiles = []
         for gbkDivFile in self.filelist:
             try:
                 print(gbkDivFile)
                 path,gbkFileName = os.path.split(gbkDivFile)
                 self.currentFile.emit(gbkFileName)
                 database = os.path.join(self.targetfolder,'{}.clusterTools.fasta'.format(gbkDivFile))
-                processGbkDivFile(gbkDivFile,database,self.currentSpecies)
+                if not os.path.isfile(database):
+                    processGbkDivFile(gbkDivFile,database,self.currentSpecies)
+                clusterToolsFastaFiles.append(database)
                 os.remove(gbkDivFile)
             except Exception as e:
                 print(e)
                 self.failedToProcess.append(gbkFileName)
                 pass
-        clusterToolsFastaFiles = glob(os.path.join(self.targetfolder,'*.clusterTools.fasta'))
         with open(os.path.join(self.targetfolder,'gbDivDB.clusterTools.fasta'), 'a') as outfile:
             for clusterToolsFastaFile in clusterToolsFastaFiles:
                 with open(clusterToolsFastaFile) as infile:
                     for line in infile:
                         outfile.write(line)
+        for clusterToolsFastaFile in clusterToolsFastaFiles:
+            os.remove(clusterToolsFastaFile)
         self.finished.emit(self.failedToProcess)
 
 class createDbWorker(QObject):
@@ -241,15 +245,16 @@ class runBlastWorker(QObject):
         ### Generate Input Fasta
         generateInputFasta(self.forBLAST,self.outputDir)
         self.inputGenerated.emit(True)
-        baseDir, ext = os.path.splitext(self.pathToDatabase)
-        phrCheck = iglob(baseDir + '*phr')
-        pinCheck = iglob(baseDir + '*pin')
-        psqCheck = iglob(baseDir + '*psq')
+        filePath, fileName = os.path.split(self.pathToDatabase)
+        phrCheck = glob(self.pathToDatabase + '.phr')
+        pinCheck = glob(self.pathToDatabase + '.pin')
+        psqCheck = glob(self.pathToDatabase + '.psq')
 
-        outdirPhrCheck = iglob(os.path.join(self.outputDir,'*phr'))
-        outdirPinCheck = iglob(os.path.join(self.outputDir, '*pin'))
-        outdirPsqCheck = iglob(os.path.join(self.outputDir, '*psq'))
-
+        outdirPhrCheck = glob(os.path.join(self.outputDir,'{}.phr'.format(fileName)))
+        outdirPinCheck = glob(os.path.join(self.outputDir,'{}.pin'.format(fileName)))
+        outdirPsqCheck = glob(os.path.join(self.outputDir,'{}.psq'.format(fileName)))
+        print('DB Path Check',phrCheck,pinCheck,psqCheck)
+        print('Output Dir Check',outdirPhrCheck,outdirPinCheck,outdirPsqCheck)
         ### Check for Blastp formatted Database
         path, outputDBname = os.path.split(self.pathToDatabase)
         ## BLAST formatted database is in database path
@@ -263,11 +268,9 @@ class runBlastWorker(QObject):
         else:
             self.makeDB.emit(True)
             dbInOutputFolder = True
-
             out, err, retcode = MakeBlastDB(self.makeblastdbExec, self.pathToDatabase, self.outputDir,outputDBname)
             if retcode != 0:
                 self.dbCreated.emit(False)
-                self.terminate()
                 return
             else:
                 self.dbCreated.emit(True)
@@ -375,6 +378,11 @@ class runProcessSearchListOptionalHits(QObject):
         self.result.emit(filteredClusters)
 
 class downloadNcbiFilesWindow(QWidget,downloadNcbiFilesWin.Ui_downloadNcbiWin):
+    def __init__(self):
+        super(self.__class__,self).__init__()
+        self.setupUi(self)
+
+class gbDivSummaryWindow(QWidget,gbDivSumWin.Ui_DatabaseSummaryWin):
     def __init__(self):
         super(self.__class__,self).__init__()
         self.setupUi(self)
@@ -650,6 +658,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
         else:
+            self.setEnabled(False)
             alreadyDownloadedAcc = set(os.path.split(x)[1].split('.gbk')[0] for x in glob(os.path.join(ncbiFileDlDir,'*.gbk')))
             alreadyDownloadedGI = set(self.acc2gi[acc] for acc in alreadyDownloadedAcc if acc in self.acc2gi.keys())
             alreadyDlGIDict = {gi:self.ncbiDLdict[gi][1] for gi in alreadyDownloadedGI}
@@ -670,7 +679,8 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             self.downloadNcbiFilesWorker = downloadNcbiFilesWorker(list(taskList-alreadyDownloadedGI),ncbiFileDlDir)
             self.downloadNcbiFilesWin = downloadNcbiFilesWindow()
             self.downloadNcbiFilesWin.doneBtn.clicked.connect(self.downloadNcbiFilesWin.close)
-            self.downloadNcbiFilesWin.cancelBtn.clicked.connect(lambda: self.abortSearch(self.downloadNcbiFilesWin,self.runnerThread))
+            self.downloadNcbiFilesWin.cancelBtn.clicked.connect(lambda: self.abortSearch(self.downloadNcbiFilesWin,
+                                                                                         self.runnerThread,self.downloadNcbiFilesWorker))
             self.downloadNcbiFilesWin.progressBar.setMaximum(int(len(taskList-alreadyDownloadedGI)))
             self.downloadNcbiFilesWin.progressBar.setValue(0)
             self.downloadNcbiFilesWorker.moveToThread(self.runnerThread)
@@ -690,8 +700,10 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.ncbiFileDLlist.clear()
         self.ncbiDLdict = dict()
         self.downloadNcbiFilesWin.doneBtn.setEnabled(True)
+        self.setEnabled(True)
         if self.runnerThread:
             self.runnerThread.terminate()
+
     ### Genbank Download Functions #####
     def redoGbDlEstimate(self):
         self.checkRequestBtn.setEnabled(True)
@@ -705,7 +717,15 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         if self.verbose:
             print(gbDivsToDl)
         for keyword in gbDivsToDl:
-            fileList,sizes = zip(*getGbkDlList(keyword))
+            try:
+                fileList,sizes = zip(*getGbkDlList(keyword))
+            except Exception as e:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setText("Problems Connecting to NCBI Database")
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec()
+                return
             if self.verbose:
                 print(fileList)
             self.gbDivFilesToDlList.extend(fileList)
@@ -742,10 +762,11 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
         else:
+            self.setEnabled(False)
             alreadyDownloaded = set(os.listdir(gbDivFileDir))
             targetlist = [x.split('.clusterToolsDB')[0] for x in tasklist-alreadyDownloaded]
             if self.verbose:
-                print(targetlist)
+                print('Files to Download: ',targetlist)
             if not self.runnerThread:
                 self.runnerThread = QThread()
             self.runnerThread.start()
@@ -755,7 +776,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             self.genbankDivFilesStatusWin.doneBtn.clicked.connect(self.genbankDivFilesStatusWin.close)
 
             self.genbankDivFilesStatusWin.cancelBtn.clicked.connect(
-                lambda: self.abortSearch(self.genbankDivFilesStatusWin, self.runnerThread))
+                lambda: self.abortSearch(self.genbankDivFilesStatusWin, self.runnerThread,self.downloadGbDivFilesWorker))
 
             self.genbankDivFilesStatusWin.progressBar.setMaximum(int(len(tasklist - alreadyDownloaded)))
             self.genbankDivFilesStatusWin.progressBar.setValue(0)
@@ -774,15 +795,19 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                         "Proceeding with DB Creation With Downloaded Files".format('\n'.join(dlFailedList)))
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
+        gbDivsToDl = [self.gbDivList[idx].lower() for idx, checkbox in enumerate(self.checkBoxList) if
+                      checkbox.checkState() == 2]
+        filesToProcess = []
+        for div in gbDivsToDl:
+            for gbkDivFile in glob(os.path.join(targetDir,'*{}*.gz.clusterToolsDB'.format(div))):
+                filesToProcess.append(gbkDivFile)
 
-        filesToProcess = glob(os.path.join(targetDir,'*.gz.clusterToolsDB'))
         if self.verbose:
-            print(filesToProcess)
+            print('Files to process:',filesToProcess)
         self.genbankDivFilesStatusWin.title.setText('Processing Genbank Division File:')
         self.genbankDivFilesStatusWin.currentTask.setText(' : ')
         self.genbankDivFilesStatusWin.progressBar.setMaximum(int(len(filesToProcess)))
         self.genbankDivFilesStatusWin.progressBar.setValue(0)
-
         if not self.runnerThread:
             self.runnerThread = QThread()
         self.runnerThread.start()
@@ -813,15 +838,23 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
     def gbProcessFileFinished(self,processFailed,dlFailed):
         self.genbankDivFilesStatusWin.title.setText('Database Completed!')
         self.genbankDivFilesStatusWin.doneBtn.setEnabled(True)
-        failedFiles = ''
-        if dlFailed:
-            failedFiles += 'Failed to Download: {}\n'.format('\n'.join(dlFailed))
-        if processFailed:
-            failedFiles += 'Failed to Process: {}'.format('\n'.join(processFailed))
-        if failedFiles:
-            self.genbankDivFilesStatusWin.currentTask.setText(failedFiles)
+        self.setEnabled(True)
         if self.runnerThread:
             self.runnerThread.terminate()
+        self.displayGbDivSummary(processFailed,dlFailed)
+
+    def displayGbDivSummary(self,processFailed,dlFailed):
+        self.gbDivDlSummaryWin = gbDivSummaryWindow()
+        # populate lists
+        for dlFile in self.gbDivFilesToDlList:
+            self.gbDivDlSummaryWin.dlList.addItem(dlFile)
+        for dlFailedFile in dlFailed:
+            self.gbDivDlSummaryWin.dlFailedList.addItem(dlFailedFile)
+        for processFailedFile in processFailed:
+            self.gbDivDlSummaryWin.processFailedList.addItem(processFailedFile)
+        # Reset DL List
+        self.gbDivFilesToDlList = []
+        self.gbDivDlSummaryWin.show()
 
     ###########################
     def showAddGeneWin(self):
@@ -1014,6 +1047,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
         else:
+            self.setEnabled(False)
             self.runnerThread = QThread()
             self.runnerThread.start()
             if self.verbose:
@@ -1022,7 +1056,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             self.createDbStatusWin = createDbStatusWindow()
             self.createDbStatusWin.doneBtn.clicked.connect(self.createDbStatusWin.close)
             self.createDbStatusWin.cancelBtn.clicked.connect(lambda: self.abortSearch(self.createDbStatusWin,
-                                                                                      self.runnerThread))
+                                                                                      self.runnerThread,self.createDbWorker))
             self.createDbStatusWin.progressBar.setMaximum(int(self.totalFiles.text()))
             self.createDbWorker.moveToThread(self.runnerThread)
             self.createDbWorker.start.connect(self.createDbWorker.run)
@@ -1039,6 +1073,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
     def createDbSuccessful(self):
         self.genbankList.clear()
         self.createDbStatusWin.doneBtn.setEnabled(True)
+        self.setEnabled(True)
         if self.runnerThread:
             self.runnerThread.terminate()
     ### Status Window Methods
@@ -1046,9 +1081,12 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         statusWin.currentTask.setText(currentTaskText)
         statusWin.percentCmpLabel.setText(percentCmpLabelText)
         statusWin.percentCmpBar.setValue(percentCmpBarValue)
-    def abortSearch(self,statusWin,currentThread):
-        statusWin.close()
+    def abortSearch(self,statusWin,currentThread,currentWorker):
+        del currentWorker
         currentThread.terminate()
+        statusWin.close()
+        self.setEnabled(True)
+
     ### Results Window Methods
     def showResultsWindow(self,blastList,hmmList,filteredClusters):
         self.statusWin.close()
@@ -1122,7 +1160,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 self.statusWin = statusWindow()
                 self.statusWin.percentCmpBar.setMaximum(6)
                 self.updateStatusWinText(self.statusWin, 'Running Database and Output Checks', '1/6', 1)
-                self.statusWin.cancelBtn.clicked.connect(lambda: self.abortSearch(self.statusWin,self.runnerThread))
+                self.statusWin.cancelBtn.clicked.connect(lambda: self.abortSearch(self.statusWin,self.runnerThread,self.checksWorker))
                 self.statusWin.show()
                 self.checksWorker.moveToThread(self.runnerThread)
                 self.checksWorker.start.connect(self.checksWorker.run)
@@ -1194,6 +1232,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             return
         elif checkErr == 'good':
             self.checkSuccessful = True
+            self.setEnabled(False)
             self.runBlast()
             return
     ### Run BLAST Methods
@@ -1555,6 +1594,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 self.processSearchListWorker.start.emit()
     @pyqtSlot(dict)
     def generateResults(self,filteredClusters,statusWin,blastList,hmmList):
+        self.setEnabled(True)
         if filteredClusters:
             self.updateStatusWinText(statusWin, 'Search Complete',
                                      '6/6', 6)

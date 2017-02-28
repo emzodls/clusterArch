@@ -300,7 +300,6 @@ def processGbkDivFile(gbkDivFile,database,guiSignal=None):
     ## unzip gbkDivFile
     try:
         genbankHandle = SeqIO.parse(gzip.open(gbkDivFile,mode='rt'),'genbank')
-        cds_ctr = 0
         entryIDlist = set()
         entryCtr = 1
         for genbankEntry in genbankHandle:
@@ -311,6 +310,7 @@ def processGbkDivFile(gbkDivFile,database,guiSignal=None):
                 species_id = '{}.clusterTools{}'.format(species_id,entryCtr)
                 entryCtr += 1
             entryIDlist.add(species_id)
+            cds_ctr = 0
             CDS_list = (feature for feature in genbankEntry.features if feature.type == 'CDS')
             if guiSignal:
                 guiSignal.emit(species_id)
@@ -330,7 +330,7 @@ def processGbkDivFile(gbkDivFile,database,guiSignal=None):
                 if 'protein_id' in CDS.qualifiers.keys():
                     protein_id = CDS.qualifiers['protein_id'][0]
                 elif 'locus_tag' in CDS.qualifiers.keys():
-                    protein_id = CDS.qualifiers['protein_id'][0]
+                    protein_id = CDS.qualifiers['locus_tag'][0]
 
                 if 'translation' in CDS.qualifiers.keys():
                     prot_seq = Seq(CDS.qualifiers['translation'][0])
@@ -384,7 +384,7 @@ def processGbkDivFile(gbkDivFile,database,guiSignal=None):
         print(e)
         if guiSignal:
             guiSignal.emit('Failed')
-        return
+        raise Exception
 def proccessGbks(taskList,outputDir,signal):
     # make sure species list is unique
     speciesList = set()
