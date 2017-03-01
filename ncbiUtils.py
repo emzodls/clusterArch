@@ -151,14 +151,37 @@ def getGbkDlList(keyword):
 
     return fileList
 
-# def parseAssemblyReportFile(division):
-#     try:
-#         fileHandle =
+def parseAssemblyReportFile(database,division,keyword=None):
+    try:
+        assemblyHandle = urllib.request.urlopen('https://ftp.ncbi.nlm.nih.gov/genomes/{}/{}/assembly_summary.txt'.format(database,division.lower()))
+        genomeDict = dict()
+        for line in assemblyHandle:
+            line = line.decode().strip()
+            if '#' in line:
+                pass
+            else:
+                lineParse = line.split('\t')
+                try:
+                    if lineParse[10] == 'latest':
+                        species = lineParse[7]
+                        if not keyword or keyword.lower() in species.lower():
+                            acc = lineParse[0]
+                            url = lineParse[19]
+                            genomeDict[url] = (acc,species)
+                except IndexError:
+                    pass
+        return genomeDict
+    except Exception as e:
+        print(e)
+        return
+
 
 
 if __name__ == '__main__':
-    names,sizes = zip(*getGbkDlList('ENV'))
-    print(names,sum(sizes))
+    test = parseAssemblyReportFile('bacteria',keyword='burkholderia')
+    print(len(test),test)
+    # names,sizes = zip(*getGbkDlList('ENV'))
+    # print(names,sum(sizes))
     #print(sum(x[1] for x in test))
     # dl = wget.download('ftp://ftp.ncbi.nlm.nih.gov/genbank/{}'.format(test[2][0]),test[0][0])
    # print(dl)

@@ -936,14 +936,14 @@
                </widget>
               </item>
               <item row="1" column="2">
-               <widget class="QCheckBox" name="checkBox_17">
+               <widget class="QCheckBox" name="verRs">
                 <property name="text">
                  <string>Other Vertebrates</string>
                 </property>
                </widget>
               </item>
               <item row="1" column="3">
-               <widget class="QCheckBox" name="checkBox_19">
+               <widget class="QCheckBox" name="vrlRs">
                 <property name="text">
                  <string>Viral</string>
                 </property>
@@ -1000,7 +1000,10 @@
              </widget>
             </item>
             <item>
-             <layout class="QHBoxLayout" name="horizontalLayout_28">
+             <layout class="QHBoxLayout" name="horizontalLayout_28" stretch="0,2,0,0">
+              <property name="spacing">
+               <number>5</number>
+              </property>
               <item>
                <layout class="QVBoxLayout" name="verticalLayout_15">
                 <item>
@@ -1038,16 +1041,16 @@
                  </spacer>
                 </item>
                 <item>
-                 <widget class="QPushButton" name="selectAllNcbiGenomeBtn">
+                 <widget class="QPushButton" name="addAllNcbiGenomeBtn">
                   <property name="text">
-                   <string>All</string>
+                   <string>Add All</string>
                   </property>
                  </widget>
                 </item>
                 <item>
                  <widget class="QPushButton" name="addNcbiGenomeBtn">
                   <property name="text">
-                   <string>Add</string>
+                   <string>Add Selected</string>
                   </property>
                  </widget>
                 </item>
@@ -1057,6 +1060,33 @@
                    <string>Clear</string>
                   </property>
                  </widget>
+                </item>
+                <item>
+                 <layout class="QHBoxLayout" name="horizontalLayout_29">
+                  <item>
+                   <widget class="QLabel" name="label_28">
+                    <property name="text">
+                     <string>Total:</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QLabel" name="genomeSearchCtr">
+                    <property name="minimumSize">
+                     <size>
+                      <width>66</width>
+                      <height>21</height>
+                     </size>
+                    </property>
+                    <property name="text">
+                     <string>0</string>
+                    </property>
+                    <property name="alignment">
+                     <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
                 </item>
                 <item>
                  <spacer name="verticalSpacer_2">
@@ -1095,39 +1125,79 @@
                </layout>
               </item>
               <item>
-               <widget class="QPushButton" name="removeNcbiGenomeBtn">
-                <property name="text">
-                 <string>Remove</string>
-                </property>
-               </widget>
+               <layout class="QVBoxLayout" name="verticalLayout_19">
+                <item>
+                 <spacer name="verticalSpacer_4">
+                  <property name="orientation">
+                   <enum>Qt::Vertical</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>20</width>
+                    <height>40</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="removeNcbiGenomeBtn">
+                  <property name="text">
+                   <string>Remove</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <spacer name="verticalSpacer_5">
+                  <property name="orientation">
+                   <enum>Qt::Vertical</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>20</width>
+                    <height>40</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+                <item>
+                 <layout class="QHBoxLayout" name="horizontalLayout_31">
+                  <item>
+                   <widget class="QLabel" name="label_27">
+                    <property name="text">
+                     <string>Total: </string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QLabel" name="genomeDlCtr">
+                    <property name="minimumSize">
+                     <size>
+                      <width>58</width>
+                      <height>0</height>
+                     </size>
+                    </property>
+                    <property name="maximumSize">
+                     <size>
+                      <width>58</width>
+                      <height>16777215</height>
+                     </size>
+                    </property>
+                    <property name="text">
+                     <string>0</string>
+                    </property>
+                    <property name="alignment">
+                     <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </item>
+               </layout>
               </item>
              </layout>
             </item>
             <item>
              <layout class="QHBoxLayout" name="horizontalLayout_23">
-              <item>
-               <widget class="QLabel" name="label_28">
-                <property name="text">
-                 <string>Total:</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QLabel" name="label_27">
-                <property name="minimumSize">
-                 <size>
-                  <width>66</width>
-                  <height>21</height>
-                 </size>
-                </property>
-                <property name="text">
-                 <string>0</string>
-                </property>
-                <property name="alignment">
-                 <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-                </property>
-               </widget>
-              </item>
               <item>
                <widget class="Line" name="line_15">
                 <property name="orientation">

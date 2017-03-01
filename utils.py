@@ -23,11 +23,11 @@
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 from Bio.Seq import Seq
-from Bio.Alphabet import generic_protein
+from Bio.Alphabet import generic_protein,generic_dna
 from clusterTools import clusterAnalysis
 from random import random
 import sys,subprocess,os,platform
-import gzip
+import gzip,re,urllib
 
 ### To fix the file paths in windows ###
 # from http://stackoverflow.com/questions/23598289/how-to-get-windows-short-file-name-in-python
@@ -480,6 +480,59 @@ def proccessGbks(taskList,outputDir,signal):
             raise
 
 
+def ncbiGenomeFastaParser(fastaHandle):
+    # returns a fasta dictionary with entry as title and sequence as output
+    sequence = ''
+    id = ''
+    fastaDict = dict()
+    for line in fastaHandle:
+        if '>' in line:
+            if id and sequence:
+                dnaSeq = Seq(sequence,generic_dna)
+                proteinSeq = dnaSeq.translate()
+                if '*' in proteinSeq:
+                    print(id,proteinSeq)
+                fastaDict[id] = dnaSeq.translate()
+            sequence = ''
+            lineParse = line.split()
+            rawCDSid = lineParse[0].split('|')[1]
+            cdsInfoParse = rawCDSid.split('_')
+            species_id = cdsInfoParse[0]
+            cds_ctr = int(cdsInfoParse[-1])
+            descriptors = re.findall('\[{1}\w+\={1}[^=]*\]', line)
+            #print(descriptors)
+            descriptors_dict = dict()
+            for match in descriptors:
+                try:
+                    key, value = match[1:-1].split('=')
+                    descriptors_dict[key] = value
+                except ValueError:
+                    print(match[1:-1])
+                    pass
+            location = re.findall('\d+', descriptors_dict['location'])
+            gene_start = int(location[0])
+            gene_end = int(location[-1])
+            if 'complement' in descriptors_dict['location']:
+                direction_id = '-'
+            else:
+                direction_id = '+'
+            internal_id = "%s_CDS_%.5i" % (species_id, cds_ctr)
+            if 'protein_id' in descriptors_dict.keys():
+                protein_id = descriptors_dict['protein_id']
+            elif 'gene' in descriptors_dict.keys():
+                protein_id = descriptors_dict['gene']
+            elif 'locus_tag' in descriptors_dict.keys():
+                protein_id = descriptors_dict['locus_tag']
+            else:
+                protein_id = internal_id
+            id = '%s|%i-%i|%s|%s|%s' % (species_id, gene_start + 1,
+                                    gene_end, direction_id,
+                                    internal_id, protein_id)
+        else:
+            sequence += line.strip()
+    return fastaDict
+
+
 ### stack exchange http://stackoverflow.com/questions/12523586/python-format-size-application-converting-b-to-kb-mb-gb-tb
 def humanbytes(B):
    'Return the given bytes as a human friendly KB, MB, GB, or TB string'
@@ -501,4 +554,8 @@ def humanbytes(B):
       return '{0:.2f} TB'.format(B/TB)
 
 if __name__ == "__main__":
-    print(len(processGbkDivFile('/Users/emzodls/Downloads/gbbct1.seq.gz','/Users/emzodls/Downloads/testCluterTools.fasta')))
+    test = urllib.request.urlopen(
+        'https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/191/825/GCA_000191825.1_Trep_dent_F0402_V1/GCA_000191825.1_Trep_dent_F0402_V1_cds_from_genomic.fna.gz')
+    handle = gzip.open(test, mode='rt')
+    testDict = ncbiGenomeFastaParser(handle)
+    print(testDict)
