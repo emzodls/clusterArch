@@ -385,22 +385,25 @@ def processGbkDivFile(gbkDivFile,database,guiSignal=None):
         if guiSignal:
             guiSignal.emit('Failed')
         raise Exception
+
 def proccessGbks(taskList,outputDir,signal):
     # make sure species list is unique
     speciesList = set()
     for gbkFile in taskList:
         try:
             genbank_entries = SeqIO.parse(open(gbkFile), "genbank")
-
             path,fileName = os.path.split(gbkFile)
-            species_id,ext = os.path.splitext(fileName)
+            species_base,ext = os.path.splitext(fileName)
             signal.emit(fileName)
             CDS_prot_outfile_name = outputDir
             cds_ctr = 0
             entry_ctr = 1
             # See if user wants a different name
             for genbank_entry in genbank_entries:
-                species_id = species_id + '.entry%.3i' % entry_ctr
+                prot_seqs = []
+                species_id = genbank_entry.id
+                if species_id in speciesList:
+                    species_id = species_base + '.entry%.3i' % entry_ctr
                 # check for uniqueness, if there is already an entry on the list insert random number
                 if species_id in speciesList:
                     splitSpecies = species_id.split('.entry')[0]
@@ -419,17 +422,12 @@ def proccessGbks(taskList,outputDir,signal):
 
                     gene_start = max(0, CDS.location.nofuzzy_start)
                     gene_end = max(0, CDS.location.nofuzzy_end)
-                    genbank_seq = CDS.location.extract(genbank_entry)
-                    nt_seq = genbank_seq.seq
 
                     # Try to find a common name for the promoter, otherwise just use the internal ID
                     if 'protein_id' in CDS.qualifiers.keys():
                         protein_id = CDS.qualifiers['protein_id'][0]
-                    else:
-                        for feature in genbank_seq.features:
-                            if 'locus_tag' in feature.qualifiers:
-                                protein_id = feature.qualifiers['locus_tag'][0]
-
+                    elif 'locus_tag' in CDS.qualifiers.keys():
+                        protein_id = CDS.qualifiers['locus_tag'][0]
                     if 'translation' in CDS.qualifiers.keys():
                         prot_seq = Seq(CDS.qualifiers['translation'][0])
                         if direction == 1:
@@ -437,6 +435,8 @@ def proccessGbks(taskList,outputDir,signal):
                         else:
                             direction_id = '-'
                     else:
+                        genbank_seq = CDS.location.extract(genbank_entry)
+                        nt_seq = genbank_seq.seq
                         if direction == 1:
                             direction_id = '+'
                             # for protein sequence if it is at the start of the entry assume that end of sequence is in frame
@@ -471,14 +471,14 @@ def proccessGbks(taskList,outputDir,signal):
                                                                                    gene_end, direction_id,
                                                                                    internal_id, protein_id),
                                                description='%s in %s' % (protein_id, species_id))
-                        with open(CDS_prot_outfile_name, 'a') as outfile_handle:
-                            SeqIO.write(prot_entry, outfile_handle, 'fasta')
+                        prot_seqs.append(prot_entry)
+                with open(CDS_prot_outfile_name, 'a') as outfile_handle:
+                    SeqIO.write(prot_seqs, outfile_handle, 'fasta')
                 entry_ctr += 1
         except Exception as e:
             signal.emit('Error Making Database on %s \n '
                         'Error Message: %s' % (fileName,str(e)))
             raise
-
 
 def ncbiGenomeFastaParser(fastaHandle):
     # returns a fasta dictionary with entry as title and sequence as output
@@ -490,7 +490,7 @@ def ncbiGenomeFastaParser(fastaHandle):
             if id and sequence:
                 dnaSeq = Seq(sequence,generic_dna)
                 proteinSeq = dnaSeq.translate()
-                if '*' in proteinSeq:
+                if '*' in proteinSeq[:-1]:
                     print(id,proteinSeq)
                 fastaDict[id] = dnaSeq.translate()
             sequence = ''
@@ -500,7 +500,6 @@ def ncbiGenomeFastaParser(fastaHandle):
             species_id = cdsInfoParse[0]
             cds_ctr = int(cdsInfoParse[-1])
             descriptors = re.findall('\[{1}\w+\={1}[^=]*\]', line)
-            #print(descriptors)
             descriptors_dict = dict()
             for match in descriptors:
                 try:
@@ -532,6 +531,14 @@ def ncbiGenomeFastaParser(fastaHandle):
             sequence += line.strip()
     return fastaDict
 
+def fastaDictToSeqRecs(fastaDict):
+    return [SeqRecord(seq,id=id) for id,seq in fastaDict.items()]
+def writeSeqRecs(handle,SeqRecs):
+    try:
+        SeqIO.write(SeqRecs,handle,'fasta')
+        return True
+    except:
+        return False
 
 ### stack exchange http://stackoverflow.com/questions/12523586/python-format-size-application-converting-b-to-kb-mb-gb-tb
 def humanbytes(B):
@@ -558,4 +565,5 @@ if __name__ == "__main__":
         'https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/191/825/GCA_000191825.1_Trep_dent_F0402_V1/GCA_000191825.1_Trep_dent_F0402_V1_cds_from_genomic.fna.gz')
     handle = gzip.open(test, mode='rt')
     testDict = ncbiGenomeFastaParser(handle)
-    print(testDict)
+    testRecs = [SeqRecord(seq,id=id) for id,seq in testDict.items()]
+    print(testRecs)

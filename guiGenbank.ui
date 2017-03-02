@@ -1000,7 +1000,7 @@
              </widget>
             </item>
             <item>
-             <layout class="QHBoxLayout" name="horizontalLayout_28" stretch="0,2,0,0">
+             <layout class="QHBoxLayout" name="horizontalLayout_28" stretch="2,0,2,0">
               <property name="spacing">
                <number>5</number>
               </property>
@@ -1245,6 +1245,13 @@
                </widget>
               </item>
              </layout>
+            </item>
+            <item alignment="Qt::AlignRight">
+             <widget class="QCheckBox" name="keepGenomeFastas">
+              <property name="text">
+               <string>Keep Individual Fastas</string>
+              </property>
+             </widget>
             </item>
            </layout>
           </widget>

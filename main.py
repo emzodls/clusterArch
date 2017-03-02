@@ -21,21 +21,22 @@
     along with clusterTools.  If not, see <http://www.gnu.org/licenses/>.
 '''
 
-import os,csv
+import os,csv,urllib,gzip
 from PyQt5.QtCore import (QRegularExpression,
         Qt,QCoreApplication,QThread,pyqtSignal,pyqtSlot,QObject)
 from PyQt5 import QtGui
 from PyQt5.QtWidgets import (QApplication, QFileDialog, QMainWindow,
         QMessageBox,QCheckBox,QTableWidgetItem,QWidget,QListWidgetItem)
 from utils import parseSeqFile,parseHMMfile,generateInputFasta,generateHMMdb,MakeBlastDB,runBLAST,\
-    runHmmsearch,processSearchList,proccessGbks,processSearchListOptionalHits,humanbytes,processGbkDivFile
+    runHmmsearch,processSearchList,proccessGbks,processSearchListOptionalHits,humanbytes,processGbkDivFile,\
+    ncbiGenomeFastaParser,fastaDictToSeqRecs,writeSeqRecs
 from collections import Counter
 from glob import iglob,glob
 from itertools import chain
 from ncbiUtils import ncbiQuery,ncbiSummary,ncbiFetch,getGbkDlList,parseAssemblyReportFile
 
 import mainGuiNCBI,resultsWindow,status,parameters,sys,createDbStatus,addGene,downloadNcbiFilesWin,gbDivSumWin, wget
-
+#### NCBI Query Functions
 class ncbiQueryWorker(QObject):
     start = pyqtSignal()
     connectionErr = pyqtSignal()
@@ -146,6 +147,50 @@ class processGbDivFilesWorker(QObject):
         for clusterToolsFastaFile in clusterToolsFastaFiles:
             os.remove(clusterToolsFastaFile)
         self.finished.emit(self.failedToProcess)
+
+class downloadNcbiGenomesWorker(QObject):
+    start = pyqtSignal()
+    currentFile = pyqtSignal(str)
+    finished = pyqtSignal(set)
+
+    def __init__(self,dlDict,outputDB,saveFastas=False):
+        self.dlDict = dlDict
+        self.outputDB = outputDB
+        self.failedAcc = set()
+        super(downloadNcbiGenomesWorker,self).__init__()
+
+    @pyqtSlot()
+    @pyqtSlot(str)
+    @pyqtSlot(list)
+    def run(self):
+        if self.saveFastas:
+            outputPath,dbName = os.path.split(self.outputDB)
+            os.mkdir(os.path.join(outputPath,'fastas'))
+        for url,(acc,species) in self.dlDict.items():
+            url = url.replace('ftp://','https://')
+            accTag = url.split('/')[-1]
+            urlToDl = url + '/' + accTag + '_cds_from_genomic.fna.gz'
+            self.currentFile.emit(accTag)
+            try:
+                urlHandle = urllib.request.urlopen(urlToDl)
+                fastaHandle = gzip.open(urlHandle, mode='rt')
+                fastaDict = ncbiGenomeFastaParser(fastaHandle)
+            except:
+                self.failedAcc.add((acc,species))
+                pass
+
+            if fastaDict:
+                recordsToAdd = fastaDictToSeqRecs(fastaDict)
+                if saveFastas:
+                    with open('fastas/{}.clusterTools.fasta'.format(accTag),'w') as handle:
+                        writeSeqRecs(handle,recordsToAdd)
+                with open(self.outputDB,'a') as handle:
+                    successFlag = writeSeqRecs(handle,recordsToAdd)
+                if not successFlag:
+                    self.failedAcc.add(acc)
+            else:
+                self.failedAcc.add(acc)
+        self.finished.emit(self.failedAcc)
 
 class createDbWorker(QObject):
     start = pyqtSignal()
@@ -472,6 +517,9 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         ### Set up NCBI Genomes Interface
         self.ncbiGenomeSearchDict = dict()
         self.ncbiGenomeDlDict = dict()
+        self.ncbiGenomeSearchSet = set()
+        self.ncbiGenomeDlSet = set()
+
         self.gbGenomeCheckBoxList = [self.archGbk,self.bctGbk,self.funGbk,self.invGbk,self.metaGbk,self.otherGbk,
                                      self.plnGbk,self.proGbk,self.mamGbk,self.verGbk]
         self.gbGenomeDivList = ['archaea','bacteria','fungi','invertebrate','metagenomes','other','plant','protozoa',
@@ -490,6 +538,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.removeNcbiGenomeBtn.clicked.connect(self.removeNcbiGenome)
 
         self.selectNcbiGenomeDlDirBtn.clicked.connect(self.selectNcbiGenomeDlDir)
+        self.downloadNcbiGenomesBtn.clicked.connect(self.downloadNcbiGenomes)
 
 
 
@@ -884,7 +933,12 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
     ###########################
     ### NCBI Genomes DB Functions ####
     def queryGenomeDb(self):
-        self.ncbiGenomesSearchResults.addItem('Querying NCBI Genomes Database...')
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Information)
+        msg.setText("Querying NCBI Genomes Database")
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec()
+        self.setEnabled(False)
         gbTags = [self.gbGenomeDivList[idx] for idx,checkbox in enumerate(self.gbGenomeCheckBoxList)
                        if checkbox.checkState() == 2]
         rsTags = [self.rsGenomeDivList[idx] for idx,checkbox in enumerate(self.rsGenomeCheckBoxList)
@@ -898,23 +952,30 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         for tag in rsTags:
             dictToAdd = parseAssemblyReportFile('refseq', tag, keyword=searchText)
             self.ncbiGenomeSearchDict = {**self.ncbiGenomeSearchDict, **dictToAdd}
-
-        self.ncbiGenomesSearchResults.takeItem(0)
         for acc,species in self.ncbiGenomeSearchDict.values():
-            self.ncbiGenomesSearchResults.addItem('{} : {}'.format(acc,species))
+            if acc in self.ncbiGenomeSearchSet:
+                pass
+            else:
+                self.ncbiGenomesSearchResults.addItem('{} := {}'.format(acc,species))
+                self.ncbiGenomeSearchSet.add(acc)
         self.genomeSearchCtr.setText(str(len(self.ncbiGenomeSearchDict)))
+        self.setEnabled(True)
 
     def clearGenomeQuery(self):
         self.ncbiGenomesSearchResults.clear()
         self.ncbiGenomeSearchDict = dict()
+        self.ncbiGenomeSearchSet = set()
         self.genomeSearchCtr.setText(str(len(self.ncbiGenomeSearchDict)))
 
     def addAllNcbiGenomes(self):
         entriesToDL = set()
         for idx in range(self.ncbiGenomesSearchResults.count()):
             genome = self.ncbiGenomesSearchResults.item(idx)
-            acc, species = [x.strip() for x in genome.text().split(':')]
-            self.ncbiGenomeDlList.addItem('{} : {}'.format(acc, species))
+            try:
+                acc, species = [x.strip() for x in genome.text().split(':=')]
+            except Exception as e:
+                print(e,str([x.strip() for x in genome.text().split(':=')]))
+            self.ncbiGenomeDlList.addItem('{} := {}'.format(acc, species))
             entriesToDL.add((acc, species))
         self.ncbiGenomeDlDict = {k:v for k,v in self.ncbiGenomeSearchDict.items() if v in entriesToDL}
         self.genomeDlCtr.setText(str(len(self.ncbiGenomeDlDict)))
@@ -923,8 +984,11 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
     def addNcbiGenomes(self):
         entriesToDL = set()
         for genome in self.ncbiGenomesSearchResults.selectedItems():
-            acc,species = [x.strip() for x in genome.text().split(':')]
-            self.ncbiGenomeDlList.addItem('{} : {}'.format(acc,species))
+            try:
+                acc,species = [x.strip() for x in genome.text().split(':=')]
+            except Exception as e:
+                print(e,str([x.strip() for x in genome.text().split(':=')]))
+            self.ncbiGenomeDlList.addItem('{} := {}'.format(acc,species))
             entriesToDL.add((acc,species))
         self.ncbiGenomeDlDict = {k:v for k,v in self.ncbiGenomeSearchDict.items() if v in entriesToDL}
         self.genomeDlCtr.setText(str(len(self.ncbiGenomeDlDict)))
@@ -938,12 +1002,15 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
     def removeNcbiGenome(self):
         entriesToDelete = set()
         for genome in self.ncbiGenomeDlList.selectedItems():
-            acc, species = [x.strip() for x in genome.text().split(':')]
+            acc, species = [x.strip() for x in genome.text().split(':=')]
             self.ncbiGenomeDlList.takeItem(self.ncbiGenomeDlList.row(genome))
             entriesToDelete.add((acc,species))
+        keysToDelete = set()
         for k,v in self.ncbiGenomeDlDict.items():
             if v in entriesToDelete:
-                del self.ncbiGenomeDlDict[k]
+                keysToDelete.add(k)
+        for key in keysToDelete:
+            del self.ncbiGenomeDlDict[key]
         self.genomeDlCtr.setText(str(len(self.ncbiGenomeDlDict)))
         self.updateGenomeDlBtn()
 
@@ -967,6 +1034,8 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 msg.exec()
 
     def downloadNcbiGenomes(self):
+        if self.verbose:
+            print(list(self.ncbiGenomeDlDict.keys()))
         return
 
 ############################################
