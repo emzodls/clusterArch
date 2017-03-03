@@ -35,7 +35,7 @@ from glob import iglob,glob
 from itertools import chain
 from ncbiUtils import ncbiQuery,ncbiSummary,ncbiFetch,getGbkDlList,parseAssemblyReportFile
 
-import mainGuiNCBI,resultsWindow,status,parameters,sys,createDbStatus,addGene,downloadNcbiFilesWin,gbDivSumWin, wget
+import mainGuiNCBI,resultsWindow,status,parameters,sys,createDbStatus,addGene,downloadNcbiFilesWin,gbDivSumWin, ncbiGenomeSumWin,wget
 #### NCBI Query Functions
 class ncbiQueryWorker(QObject):
     start = pyqtSignal()
@@ -157,6 +157,7 @@ class downloadNcbiGenomesWorker(QObject):
         self.dlDict = dlDict
         self.outputDB = outputDB
         self.failedAcc = set()
+        self.saveFastas = saveFastas
         super(downloadNcbiGenomesWorker,self).__init__()
 
     @pyqtSlot()
@@ -175,22 +176,23 @@ class downloadNcbiGenomesWorker(QObject):
                 urlHandle = urllib.request.urlopen(urlToDl)
                 fastaHandle = gzip.open(urlHandle, mode='rt')
                 fastaDict = ncbiGenomeFastaParser(fastaHandle)
-            except:
-                self.failedAcc.add((acc,species))
+                if fastaDict:
+                    recordsToAdd = fastaDictToSeqRecs(fastaDict)
+                    if self.saveFastas:
+                        with open(os.path.join(outputPath,'fastas','{}.clusterTools.fasta'.format(accTag)), 'w') as handle:
+                            writeSeqRecs(handle, recordsToAdd)
+                    with open(self.outputDB, 'a') as handle:
+                        successFlag = writeSeqRecs(handle, recordsToAdd)
+                    if not successFlag:
+                        self.failedAcc.add((accTag, species))
+                else:
+                    self.failedAcc.add((accTag, species))
+            except Exception as e:
+                print(e)
+                self.failedAcc.add((accTag,species))
                 pass
-
-            if fastaDict:
-                recordsToAdd = fastaDictToSeqRecs(fastaDict)
-                if saveFastas:
-                    with open('fastas/{}.clusterTools.fasta'.format(accTag),'w') as handle:
-                        writeSeqRecs(handle,recordsToAdd)
-                with open(self.outputDB,'a') as handle:
-                    successFlag = writeSeqRecs(handle,recordsToAdd)
-                if not successFlag:
-                    self.failedAcc.add(acc)
-            else:
-                self.failedAcc.add(acc)
         self.finished.emit(self.failedAcc)
+        return
 
 class createDbWorker(QObject):
     start = pyqtSignal()
@@ -291,13 +293,13 @@ class runBlastWorker(QObject):
         generateInputFasta(self.forBLAST,self.outputDir)
         self.inputGenerated.emit(True)
         filePath, fileName = os.path.split(self.pathToDatabase)
-        phrCheck = glob(self.pathToDatabase + '.phr')
-        pinCheck = glob(self.pathToDatabase + '.pin')
-        psqCheck = glob(self.pathToDatabase + '.psq')
+        phrCheck = glob(self.pathToDatabase + '*.phr')
+        pinCheck = glob(self.pathToDatabase + '*.pin')
+        psqCheck = glob(self.pathToDatabase + '*.psq')
 
-        outdirPhrCheck = glob(os.path.join(self.outputDir,'{}.phr'.format(fileName)))
-        outdirPinCheck = glob(os.path.join(self.outputDir,'{}.pin'.format(fileName)))
-        outdirPsqCheck = glob(os.path.join(self.outputDir,'{}.psq'.format(fileName)))
+        outdirPhrCheck = glob(os.path.join(self.outputDir,'{}*.phr'.format(fileName)))
+        outdirPinCheck = glob(os.path.join(self.outputDir,'{}*.pin'.format(fileName)))
+        outdirPsqCheck = glob(os.path.join(self.outputDir,'{}*.psq'.format(fileName)))
         print('DB Path Check',phrCheck,pinCheck,psqCheck)
         print('Output Dir Check',outdirPhrCheck,outdirPinCheck,outdirPsqCheck)
         ### Check for Blastp formatted Database
@@ -426,6 +428,12 @@ class downloadNcbiFilesWindow(QWidget,downloadNcbiFilesWin.Ui_downloadNcbiWin):
     def __init__(self):
         super(self.__class__,self).__init__()
         self.setupUi(self)
+
+class ncbiGenomeSummaryWin(QWidget,ncbiGenomeSumWin.Ui_ncbiGenomeSummaryWin):
+    def __init__(self):
+        super(self.__class__,self).__init__()
+        self.setupUi(self)
+
 
 class gbDivSummaryWindow(QWidget,gbDivSumWin.Ui_DatabaseSummaryWin):
     def __init__(self):
@@ -975,9 +983,12 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 acc, species = [x.strip() for x in genome.text().split(':=')]
             except Exception as e:
                 print(e,str([x.strip() for x in genome.text().split(':=')]))
-            self.ncbiGenomeDlList.addItem('{} := {}'.format(acc, species))
-            entriesToDL.add((acc, species))
-        self.ncbiGenomeDlDict = {k:v for k,v in self.ncbiGenomeSearchDict.items() if v in entriesToDL}
+            if (acc,species) in self.ncbiGenomeDlSet:
+                pass
+            else:
+                self.ncbiGenomeDlList.addItem('{} := {}'.format(acc, species))
+                self.ncbiGenomeDlSet.add((acc,species))
+        self.ncbiGenomeDlDict = {k:v for k,v in self.ncbiGenomeSearchDict.items() if v in self.ncbiGenomeDlSet}
         self.genomeDlCtr.setText(str(len(self.ncbiGenomeDlDict)))
         self.updateGenomeDlBtn()
 
@@ -988,9 +999,12 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 acc,species = [x.strip() for x in genome.text().split(':=')]
             except Exception as e:
                 print(e,str([x.strip() for x in genome.text().split(':=')]))
-            self.ncbiGenomeDlList.addItem('{} := {}'.format(acc,species))
-            entriesToDL.add((acc,species))
-        self.ncbiGenomeDlDict = {k:v for k,v in self.ncbiGenomeSearchDict.items() if v in entriesToDL}
+            if (acc, species) in self.ncbiGenomeDlSet:
+                pass
+            else:
+                self.ncbiGenomeDlList.addItem('{} := {}'.format(acc,species))
+                self.ncbiGenomeDlSet.add((acc,species))
+        self.ncbiGenomeDlDict = {k:v for k,v in self.ncbiGenomeSearchDict.items() if v in self.ncbiGenomeDlSet}
         self.genomeDlCtr.setText(str(len(self.ncbiGenomeDlDict)))
         self.updateGenomeDlBtn()
 
@@ -1011,6 +1025,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 keysToDelete.add(k)
         for key in keysToDelete:
             del self.ncbiGenomeDlDict[key]
+        self.ncbiGenomeDlSet -= entriesToDelete
         self.genomeDlCtr.setText(str(len(self.ncbiGenomeDlDict)))
         self.updateGenomeDlBtn()
 
@@ -1036,7 +1051,66 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
     def downloadNcbiGenomes(self):
         if self.verbose:
             print(list(self.ncbiGenomeDlDict.keys()))
+        ncbiGenomeDlDir = self.ncbiGenomeDlDir.text()
+        if not ncbiGenomeDlDir:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("No Output Directory Specified")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+        else:
+            self.setEnabled(False)
+            if not self.runnerThread:
+                self.runnerThread = QThread()
+            self.runnerThread.start()
+            self.ncbiGenomeDlStatusWin = downloadNcbiFilesWindow()
+            if self.keepGenomeFastas.checkState() == 2:
+                saveFasta = True
+            else:
+                saveFasta = False
+            self.ncbiGenomeDlWorker = downloadNcbiGenomesWorker(self.ncbiGenomeDlDict,ncbiGenomeDlDir,saveFastas=saveFasta)
+            self.ncbiGenomeDlStatusWin.doneBtn.clicked.connect(self.ncbiGenomeDlStatusWin.close)
+
+            self.ncbiGenomeDlStatusWin.cancelBtn.clicked.connect(
+                lambda: self.abortSearch(self.ncbiGenomeDlStatusWin, self.runnerThread,self.ncbiGenomeDlWorker))
+
+            self.ncbiGenomeDlStatusWin.progressBar.setMaximum(int(len(self.ncbiGenomeDlDict)))
+            self.ncbiGenomeDlStatusWin.progressBar.setValue(0)
+            self.ncbiGenomeDlStatusWin.show()
+            self.ncbiGenomeDlWorker.moveToThread(self.runnerThread)
+            self.ncbiGenomeDlWorker.start.connect(self.ncbiGenomeDlWorker.run)
+            self.ncbiGenomeDlWorker.currentFile.connect(self.updateCurrentGenomeDlFile)
+            self.ncbiGenomeDlWorker.finished.connect(lambda x: self.ncbiGenomeDlFinished(x))
+            self.ncbiGenomeDlWorker.start.emit()
         return
+    def updateCurrentGenomeDlFile(self,currentFile):
+        self.ncbiGenomeDlStatusWin.currentTask.setText(currentFile)
+        self.ncbiGenomeDlStatusWin.progressBar.setValue(self.ncbiGenomeDlStatusWin.progressBar.value() + 1)
+        self.ncbiGenomeDlStatusWin.progressLabel.setText('{}/{}'.format(self.ncbiGenomeDlStatusWin.progressBar.value(),
+                                                                       self.ncbiGenomeDlStatusWin.progressBar.maximum()))
+    def ncbiGenomeDlFinished(self,failedList):
+        self.ncbiGenomeDlStatusWin.title.setText('Database Completed!')
+        self.ncbiGenomeDlStatusWin.doneBtn.setEnabled(True)
+        self.ncbiGenomeDlList.clear()
+        self.ncbiGenomesSearchResults.clear()
+        self.ncbiGenomeSearchSet = set()
+        self.ncbiGenomeSearchDict = dict()
+        self.setEnabled(True)
+        if self.runnerThread:
+            self.runnerThread.terminate()
+        self.displayNcbiDlSummary(failedList)
+
+    def displayNcbiDlSummary(self,failedList):
+        self.ncbiGenomeSummaryWin = ncbiGenomeSummaryWin()
+        # populate lists
+        for url, (acc, species) in self.ncbiGenomeDlDict.items():
+            url = url.replace('ftp://','https://')
+            accTag = url.split('/')[-1]
+            self.ncbiGenomeSummaryWin.dlList.addItem('{} : {}'.format(accTag,species))
+        self.ncbiGenomeDlDict = dict()
+        for (acc, species) in failedList:
+            self.ncbiGenomeSummaryWin.dlFailedList.addItem('{} : {}'.format(acc, species))
+        self.ncbiGenomeSummaryWin.show()
 
 ############################################
 

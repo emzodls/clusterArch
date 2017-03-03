@@ -497,7 +497,7 @@ def ncbiGenomeFastaParser(fastaHandle):
             lineParse = line.split()
             rawCDSid = lineParse[0].split('|')[1]
             cdsInfoParse = rawCDSid.split('_')
-            species_id = cdsInfoParse[0]
+            species_id = rawCDSid.split('_cds_')[0]
             cds_ctr = int(cdsInfoParse[-1])
             descriptors = re.findall('\[{1}\w+\={1}[^=]*\]', line)
             descriptors_dict = dict()
