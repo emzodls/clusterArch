@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>764</width>
-    <height>660</height>
+    <width>865</width>
+    <height>715</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -68,8 +68,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>710</width>
-             <height>431</height>
+             <width>811</width>
+             <height>486</height>
             </rect>
            </property>
            <attribute name="label">
@@ -525,8 +525,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>710</width>
-             <height>431</height>
+             <width>811</width>
+             <height>486</height>
             </rect>
            </property>
            <attribute name="label">
@@ -772,6 +772,14 @@
            </layout>
           </widget>
           <widget class="QWidget" name="genomesDB">
+           <property name="geometry">
+            <rect>
+             <x>0</x>
+             <y>0</y>
+             <width>796</width>
+             <height>494</height>
+            </rect>
+           </property>
            <attribute name="label">
             <string>Prepare Database from NCBI Genomes</string>
            </attribute>
@@ -783,11 +791,40 @@
              <number>0</number>
             </property>
             <item>
-             <widget class="QLabel" name="label_21">
-              <property name="text">
-               <string>Genbank</string>
-              </property>
-             </widget>
+             <layout class="QHBoxLayout" name="horizontalLayout_32">
+              <item>
+               <widget class="QLabel" name="label_21">
+                <property name="text">
+                 <string>Genbank</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QComboBox" name="gbCategorySelector">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <item>
+                 <property name="text">
+                  <string>All</string>
+                 </property>
+                </item>
+                <item>
+                 <property name="text">
+                  <string>Representative and Reference Only</string>
+                 </property>
+                </item>
+                <item>
+                 <property name="text">
+                  <string>Reference Only</string>
+                 </property>
+                </item>
+               </widget>
+              </item>
+             </layout>
             </item>
             <item>
              <widget class="Line" name="line_12">
@@ -871,11 +908,50 @@
              </layout>
             </item>
             <item>
-             <widget class="QLabel" name="label_22">
-              <property name="text">
-               <string>Refseq</string>
+             <widget class="Line" name="line_17">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
               </property>
              </widget>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_30">
+              <item>
+               <widget class="QLabel" name="label_22">
+                <property name="text">
+                 <string>Refseq</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QComboBox" name="rsCategorySelector">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="currentIndex">
+                 <number>0</number>
+                </property>
+                <item>
+                 <property name="text">
+                  <string>All</string>
+                 </property>
+                </item>
+                <item>
+                 <property name="text">
+                  <string>Representative and Reference Only</string>
+                 </property>
+                </item>
+                <item>
+                 <property name="text">
+                  <string>Reference Only</string>
+                 </property>
+                </item>
+               </widget>
+              </item>
+             </layout>
             </item>
             <item>
              <widget class="Line" name="line_13">
@@ -1041,6 +1117,16 @@
                  </spacer>
                 </item>
                 <item>
+                 <widget class="QLabel" name="label_29">
+                  <property name="text">
+                   <string>Selection Filter:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QLineEdit" name="genomeQuerySelectFilter"/>
+                </item>
+                <item>
                  <widget class="QPushButton" name="addAllNcbiGenomeBtn">
                   <property name="text">
                    <string>Add All</string>
@@ -1140,9 +1226,26 @@
                  </spacer>
                 </item>
                 <item>
+                 <widget class="QLabel" name="label_30">
+                  <property name="text">
+                   <string>Selection Filter:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QLineEdit" name="genomeDlSelectFilter"/>
+                </item>
+                <item>
                  <widget class="QPushButton" name="removeNcbiGenomeBtn">
                   <property name="text">
                    <string>Remove</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="removeAllNcbiGenomeBtn">
+                  <property name="text">
+                   <string>Remove All</string>
                   </property>
                  </widget>
                 </item>
@@ -1260,8 +1363,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>710</width>
-             <height>431</height>
+             <width>811</width>
+             <height>486</height>
             </rect>
            </property>
            <attribute name="label">
@@ -1956,7 +2059,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>764</width>
+     <width>865</width>
      <height>22</height>
     </rect>
    </property>

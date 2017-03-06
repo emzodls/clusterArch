@@ -4,7 +4,7 @@ import os,timeit
 import wget
 from ftplib import FTP
 
-def ncbiQuery(keyword,organism,accession,minLength=0,maxLength=10000000000,retmax=1000):
+def ncbiQuery(keyword,organism,accession,minLength=0,maxLength=10000000000,retmax=1000,db='nuccore'):
     if not keyword and not organism and not accession:
         print("Nothing")
     else:
@@ -12,8 +12,8 @@ def ncbiQuery(keyword,organism,accession,minLength=0,maxLength=10000000000,retma
         organism = organism.strip().replace(" ","%20")
         keyword = keyword.strip().replace(" ", "%20")
         if accession:
-            esearchURL = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=nuccore&term={}[accn]%20AND%20{}:{}[SLEN]" \
-                         "&retmode=text&retmax={}&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(accession,minLength,maxLength,retmax)
+            esearchURL = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db={}&term={}[accn]%20AND%20{}:{}[SLEN]" \
+                         "&retmode=text&retmax={}&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(db,accession,minLength,maxLength,retmax)
         # otherwise parse the keywords and organisms entries
         else:
             baseURL = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=nuccore&term="
@@ -32,17 +32,17 @@ def ncbiQuery(keyword,organism,accession,minLength=0,maxLength=10000000000,retma
             numHits = int(parseRequest.find('Count').text)
             ncbiIDsList = [idElem.text for idElem in parseRequest.iter('Id')]
         except:
-            print("Error Correcting to NCBI Server")
+            print("Error Connecting to NCBI Server")
             raise
     return numHits,ncbiIDsList
 
-def ncbiSummary(idList,chunkSize = 250):
+def ncbiSummary(idList,db='nuccore',chunkSize = 250):
     ncbiDict = dict()
     acc2gi = dict()
     idChunks = [idList[x:x+chunkSize] for x in range(0,len(idList),chunkSize)]
     for dataChunk in idChunks:
-        esummaryURL ="http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=nuccore&" \
-                     "id={}&retmode=xml&retmax=251&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(','.join(dataChunk))
+        esummaryURL ="http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db={}&" \
+                     "id={}&retmode=xml&retmax=251&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(db,','.join(dataChunk))
         try:
             ncbiRequest = urllib.request.urlopen(esummaryURL)
             parseRequest = etree.parse(ncbiRequest)
@@ -61,13 +61,13 @@ def ncbiSummary(idList,chunkSize = 250):
                 pass
     return ncbiDict,acc2gi
 
-def ncbiFetch(idList,outputFolder,chunkSize = 100,batchMode=True,ncbiDict={},guiSignal=None):
+def ncbiFetch(idList,outputFolder,chunkSize = 100,batchMode=True,ncbiDict={},guiSignal=None,db='nuccore'):
     if batchMode:
         idChunks = [idList[x:x+chunkSize] for x in range(0,len(idList),chunkSize)]
         for dataChunk in idChunks:
             print(dataChunk)
-            fetchURL = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id={}" \
-                       "&retmode=text&rettype=gbwithparts&retmax=251&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(','.join(str(gi) for gi in dataChunk))
+            fetchURL = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db={}&id={}" \
+                       "&retmode=text&rettype=gbwithparts&retmax=251&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(db,','.join(str(gi) for gi in dataChunk))
             print(fetchURL)
             ## from Eli Korvigo in biostars (https://www.biostars.org/p/66921/) modified because i'm using urllib
             def extract_records(records_handle):
@@ -102,18 +102,50 @@ def ncbiFetch(idList,outputFolder,chunkSize = 100,batchMode=True,ncbiDict={},gui
                 for line in fetchReq:
                     output.write(line)
 
-def fetchBatch():
-    l, idList = ncbiQuery('biosynthesis', 'Streptomyces', '')
-    idList = idList[:100]
-    ncbiDict = ncbiSummary(idList, chunkSize=250)
-    ncbiFetch(idList,'testFetch/')
+def accToFasta(accList,db,outputfolder):
+    acc2gi = dict()
+    for acc in accList:
+        esearchURL = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db={}&term={}[accn]" \
+                     "&retmode=text&retmax=10&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(db,acc)
+        try:
+            ncbiRequest = urllib.request.urlopen(esearchURL)
+            parseRequest = etree.parse(ncbiRequest)
+            ncbiID = [idElem.text for idElem in parseRequest.iter('Id')][0]
+            acc2gi[acc] = ncbiID
+        except:
+            print("Error Connecting to NCBI Server for acc {}".format(acc))
+            pass
+    idList = list(acc2gi.values())
+    idChunks = [idList[x:x + 100] for x in range(0, len(acc2gi), 100)]
+    for dataChunk in idChunks:
+        print(dataChunk)
+        fetchURL = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db={}&id={}" \
+                   "&retmode=text&rettype=fasta&retmax=251&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(
+            db, ','.join(str(gi) for gi in dataChunk))
+        print(fetchURL)
 
-def fetchSingle():
-    l, idList = ncbiQuery('biosynthesis', 'Streptomyces', '')
-    idList = idList[:100]
-    ncbiDict = ncbiSummary(idList, chunkSize=250)
-    ncbiFetch(idList,'testFetch/',batchMode=False,ncbiDict=ncbiDict)
-### Functions from Marnix Modified
+        ## from Eli Korvigo in biostars (https://www.biostars.org/p/66921/) modified because i'm using urllib
+        def extract_records(records_handle):
+            buffer = []
+            for line in records_handle:
+                line = line.decode()
+                if line.startswith(">") and buffer:
+                    # yield accession number and record
+                    print(buffer)
+                    currentAcc = buffer[0].split()[0][1:].split('.')[0]
+                    yield currentAcc, "".join(buffer)
+                    buffer = [line]
+                else:
+                    buffer.append(line)
+            currentAcc = buffer[0].split()[0][1:].split('.')[0]
+            yield currentAcc, "".join(buffer)
+
+        fetchReq = urllib.request.urlopen(fetchURL)
+
+        for accession, record in extract_records(fetchReq):
+            with open(os.path.join(outputfolder, '{}.fasta'.format(accession)), 'w') as output:
+                output.write(record)
+
 def ftp_connect(guiSignal=None):
   #Connect to NCBI FTP site and change to genbank directory
   try:
@@ -151,7 +183,7 @@ def getGbkDlList(keyword):
 
     return fileList
 
-def parseAssemblyReportFile(database,division,keyword=None):
+def parseAssemblyReportFile(database,division,keyword=None,categoryFilters=None):
     try:
         assemblyHandle = urllib.request.urlopen('https://ftp.ncbi.nlm.nih.gov/genomes/{}/{}/assembly_summary.txt'.format(database,division.lower()))
         genomeDict = dict()
@@ -162,12 +194,14 @@ def parseAssemblyReportFile(database,division,keyword=None):
             else:
                 lineParse = line.split('\t')
                 try:
+                    category = lineParse[4]
                     if lineParse[10] == 'latest':
-                        species = lineParse[7]
-                        if not keyword or keyword.lower() in species.lower():
-                            acc = lineParse[0]
-                            url = lineParse[19]
-                            genomeDict[url] = (acc,species)
+                        if not categoryFilters or any(catFilter in category for catFilter in categoryFilters):
+                            species = lineParse[7]
+                            if not keyword or keyword.lower() in species.lower():
+                                acc = lineParse[0]
+                                url = lineParse[19]
+                                genomeDict[url] = (acc,species)
                 except IndexError:
                     pass
         return genomeDict
@@ -178,7 +212,8 @@ def parseAssemblyReportFile(database,division,keyword=None):
 
 
 if __name__ == '__main__':
-    test = parseAssemblyReportFile('bacteria',keyword='burkholderia')
+    accList = set(x.strip() for x in open('/Volumes/Data/accList.txt'))
+    accToFasta(accList, 'protein', '/Volumes/Data/gbnA')
     print(len(test),test)
     # names,sizes = zip(*getGbkDlList('ENV'))
     # print(names,sum(sizes))

@@ -148,6 +148,44 @@ class processGbDivFilesWorker(QObject):
             os.remove(clusterToolsFastaFile)
         self.finished.emit(self.failedToProcess)
 
+class genomeQueryWorker(QObject):
+    start = pyqtSignal()
+    currentFile = pyqtSignal(str)
+    connectionErr = pyqtSignal()
+    finished = pyqtSignal(dict,bool)
+    def __init__(self,gbTags,rsTags,gbCatFilter=None,rsCatFilter=None,keyword=None):
+        self.gbTags = gbTags
+        self.rsTags = rsTags
+        self.keyword = keyword
+        self.gbCatFilter = gbCatFilter
+        self.rsCatFilter = rsCatFilter
+        self.allChecked = True
+        super(genomeQueryWorker, self).__init__()
+
+    @pyqtSlot()
+    @pyqtSlot(str)
+    def run(self):
+        ncbiGenomeSearchDict = {}
+        for tag in self.gbTags:
+            self.currentFile.emit('Reading Genbank: {}'.format(tag))
+            try:
+                dictToAdd = parseAssemblyReportFile('genbank',tag,keyword=self.keyword,categoryFilters=self.gbCatFilter)
+                ncbiGenomeSearchDict = {**ncbiGenomeSearchDict, **dictToAdd}
+            except:
+                self.allChecked = False
+                pass
+
+        for tag in self.rsTags:
+            self.currentFile.emit('Reading RefSeq: {}'.format(tag))
+            try:
+                dictToAdd = parseAssemblyReportFile('refseq', tag, keyword=self.keyword,categoryFilters=self.rsCatFilter)
+                ncbiGenomeSearchDict = {**ncbiGenomeSearchDict, **dictToAdd}
+            except:
+                self.allChecked = False
+                pass
+
+        self.finished.emit(ncbiGenomeSearchDict,self.allChecked)
+
 class downloadNcbiGenomesWorker(QObject):
     start = pyqtSignal()
     currentFile = pyqtSignal(str)
@@ -477,6 +515,9 @@ class resultsWindow(QWidget,resultsWindow.Ui_Results):
     def __init__(self):
         super(self.__class__,self).__init__()
         self.setupUi(self)
+        posIntValidator = QtGui.QIntValidator()
+        posIntValidator.setBottom(1)
+        self.gbDlWindowSize.setValidator(posIntValidator)
 
 class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
     def __init__(self,makeblastdbExec,blastExec,hmmFetchExec,hmmSearchExec,verbose=False):
@@ -507,7 +548,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.selectNcbiFileDirBtn.clicked.connect(self.setNcbiFileDlDirectory)
         self.dlNcbiFilesBtn.clicked.connect(self.downloadNcbiFiles)
 
-        self.searchFilter.editingFinished.connect(self.selectFilteredItems)
+        self.searchFilter.returnPressed.connect(self.selectFilteredItems)
         self.clearSearchSelectionBtn.clicked.connect(self.ncbiFileSearchResults.clearSelection)
         ####  Set up Genbank DB Interface ####
         self.gbDivFilesToDlList = []
@@ -544,10 +585,11 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.addNcbiGenomeBtn.clicked.connect(self.addNcbiGenomes)
         self.clearNcbiGenomeSelectionBtn.clicked.connect(self.ncbiGenomesSearchResults.clearSelection)
         self.removeNcbiGenomeBtn.clicked.connect(self.removeNcbiGenome)
-
+        self.removeAllNcbiGenomeBtn.clicked.connect(self.removeAllNcbiGenomes)
         self.selectNcbiGenomeDlDirBtn.clicked.connect(self.selectNcbiGenomeDlDir)
         self.downloadNcbiGenomesBtn.clicked.connect(self.downloadNcbiGenomes)
-
+        self.genomeQuerySelectFilter.returnPressed.connect(self.selectGenomeQueryFilteredItems)
+        self.genomeDlSelectFilter.returnPressed.connect(self.selectGenomeDlFilteredItems)
 
 
         ### Set Up Parameters and Shared Data Structures
@@ -645,8 +687,8 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 msg.setText("Min Length > Max Length, Using defaults.")
                 msg.setStandardButtons(QMessageBox.Ok)
                 msg.exec()
-
-            self.runnerThread = QThread()
+            if not self.runnerThread:
+                self.runnerThread = QThread()
             self.runnerThread.start()
             self.ncbiQueryWorker = ncbiQueryWorker(keyword,organism,accession,minLength,maxLength,retmax)
             self.ncbiQueryWorker.connectionErr.connect(self.connectionError)
@@ -778,6 +820,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.downloadNcbiFilesWin.progressBar.setValue(self.downloadNcbiFilesWin.progressBar.value()+1)
         self.downloadNcbiFilesWin.progressLabel.setText('{}/{}'.format(self.downloadNcbiFilesWin.progressBar.value(),
                                                                       self.downloadNcbiFilesWin.progressBar.maximum()))
+
     def ncbiFileDlFinished(self):
         self.ncbiFileDLlist.clear()
         self.ncbiDLdict = dict()
@@ -941,39 +984,114 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
     ###########################
     ### NCBI Genomes DB Functions ####
     def queryGenomeDb(self):
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Information)
-        msg.setText("Querying NCBI Genomes Database")
-        msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec()
-        self.setEnabled(False)
         gbTags = [self.gbGenomeDivList[idx] for idx,checkbox in enumerate(self.gbGenomeCheckBoxList)
                        if checkbox.checkState() == 2]
         rsTags = [self.rsGenomeDivList[idx] for idx,checkbox in enumerate(self.rsGenomeCheckBoxList)
                        if checkbox.checkState() == 2]
 
+
+        if self.rsCategorySelector.currentIndex() == 0:
+            rsCategoryFilters = None
+        elif self.rsCategorySelector.currentIndex() == 1:
+            rsCategoryFilters = {'reference','representative'}
+        elif self.rsCategorySelector.currentIndex() == 2:
+            rsCategoryFilters = {'reference'}
+
+        if self.gbCategorySelector.currentIndex() == 0:
+            gbCategoryFilters = None
+        elif self.gbCategorySelector.currentIndex() == 1:
+            gbCategoryFilters = {'reference','representative'}
+        elif self.gbCategorySelector.currentIndex() == 2:
+            gbCategoryFilters = {'reference'}
+
+        if self.verbose:
+            print('GB Cat', self.gbCategorySelector.currentIndex(), gbCategoryFilters)
+            print('RS Cat',self.rsCategorySelector.currentIndex(),rsCategoryFilters)
+
+
         searchText = self.organismKeyword.text().strip()
-        for tag in gbTags:
-            dictToAdd = parseAssemblyReportFile('genbank',tag,keyword=searchText)
-            # assumes there are no collisions with URLS
-            self.ncbiGenomeSearchDict = {**self.ncbiGenomeSearchDict, **dictToAdd}
-        for tag in rsTags:
-            dictToAdd = parseAssemblyReportFile('refseq', tag, keyword=searchText)
-            self.ncbiGenomeSearchDict = {**self.ncbiGenomeSearchDict, **dictToAdd}
-        for acc,species in self.ncbiGenomeSearchDict.values():
-            if acc in self.ncbiGenomeSearchSet:
-                pass
-            else:
-                self.ncbiGenomesSearchResults.addItem('{} := {}'.format(acc,species))
-                self.ncbiGenomeSearchSet.add(acc)
-        self.genomeSearchCtr.setText(str(len(self.ncbiGenomeSearchDict)))
-        self.setEnabled(True)
+
+        self.setEnabled(False)
+        if not self.runnerThread:
+            self.runnerThread = QThread()
+        self.runnerThread.start()
+
+        self.genomeQueryWorker = genomeQueryWorker(gbTags,rsTags,gbCatFilter=gbCategoryFilters,
+                                                   rsCatFilter=rsCategoryFilters,keyword = searchText)
+        self.genomeQueryStatusWin = statusWindow()
+
+        self.genomeQueryStatusWin.percentCmpBar.setMaximum(len(gbTags)+len(rsTags))
+        self.genomeQueryStatusWin.percentCmpBar.setValue(0)
+        self.genomeQueryStatusWin.currentTask.setText('Querying NCBI Genomes Database')
+        self.genomeQueryStatusWin.cancelBtn.setVisible(False)
+        self.genomeQueryStatusWin.show()
+
+        self.genomeQueryWorker.currentFile.connect(self.updateGenomeQuery)
+        self.genomeQueryWorker.finished.connect(self.genomeQueryFinished)
+
+        self.genomeQueryWorker.moveToThread(self.runnerThread)
+        self.genomeQueryWorker.start.connect(self.genomeQueryWorker.run)
+        self.genomeQueryWorker.start.emit()
+
+    def updateGenomeQuery(self,str):
+        self.genomeQueryStatusWin.currentTask.setText('Querying NCBI Genomes Database: \n {}'.format(str))
+        self.genomeQueryStatusWin.percentCmpBar.setValue(self.genomeQueryStatusWin.percentCmpBar.value() + 1)
+        self.genomeQueryStatusWin.percentCmpLabel.setText('{}/{}'.format(self.genomeQueryStatusWin.percentCmpBar.value(),
+                                                                        self.genomeQueryStatusWin.percentCmpBar.maximum()))
+
+    def genomeQueryFinished(self,genomeDict,allChecked):
+        if allChecked:
+            self.genomeQueryStatusWin.currentTask.setText('Query Done. \n All Divisions Successfully Read.')
+            self.genomeQueryStatusWin.viewResultsBtn.clicked.connect(self.genomeQueryStatusWin.close)
+            self.genomeQueryStatusWin.viewResultsBtn.setEnabled(True)
+            self.ncbiGenomeSearchDict = {**self.ncbiGenomeSearchDict,**genomeDict}
+            for acc, species in self.ncbiGenomeSearchDict.values():
+                if acc in self.ncbiGenomeSearchSet:
+                    pass
+                else:
+                    self.ncbiGenomesSearchResults.addItem('{} := {}'.format(acc, species))
+                    self.ncbiGenomeSearchSet.add(acc)
+            self.genomeSearchCtr.setText(str(len(self.ncbiGenomeSearchDict)))
+            if self.runnerThread:
+                self.runnerThread.terminate()
+            self.setEnabled(True)
+        else:
+            self.genomeQueryStatusWin.currentTask.setText('Query Done. \n Failed to Read Some Divisions. You may want to redo your search.')
+            self.genomeQueryStatusWin.viewResultsBtn.clicked.connect(self.genomeQueryStatusWin.close)
+            self.genomeQueryStatusWin.viewResultsBtn.setEnabled(True)
+            self.ncbiGenomeSearchDict = {**self.ncbiGenomeSearchDict,**genomeDict}
+            for acc, species in self.ncbiGenomeSearchDict.values():
+                if acc in self.ncbiGenomeSearchSet:
+                    pass
+                else:
+                    self.ncbiGenomesSearchResults.addItem('{} := {}'.format(acc, species))
+                    self.ncbiGenomeSearchSet.add(acc)
+            self.genomeSearchCtr.setText(str(len(self.ncbiGenomeSearchDict)))
+            if self.runnerThread:
+                self.runnerThread.terminate()
+            self.setEnabled(True)
 
     def clearGenomeQuery(self):
         self.ncbiGenomesSearchResults.clear()
         self.ncbiGenomeSearchDict = dict()
         self.ncbiGenomeSearchSet = set()
         self.genomeSearchCtr.setText(str(len(self.ncbiGenomeSearchDict)))
+
+    def removeAllNcbiGenomes(self):
+        self.ncbiGenomeDlList.clear()
+        self.ncbiGenomeDlDict = dict()
+        self.ncbiGenomeDlSet = set()
+        self.genomeDlCtr.setText(str(len(self.ncbiGenomeDlDict)))
+
+    def selectGenomeQueryFilteredItems(self):
+        selectedItems = self.ncbiGenomesSearchResults.findItems(self.genomeQuerySelectFilter.text(),Qt.MatchContains)
+        for item in selectedItems:
+            item.setSelected(True)
+
+    def selectGenomeDlFilteredItems(self):
+        selectedItems = self.ncbiGenomeDlList.findItems(self.genomeDlSelectFilter.text(),Qt.MatchContains)
+        for item in selectedItems:
+            item.setSelected(True)
 
     def addAllNcbiGenomes(self):
         entriesToDL = set()
@@ -1305,7 +1423,8 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             msg.exec()
         else:
             self.setEnabled(False)
-            self.runnerThread = QThread()
+            if not self.runnerThread:
+                self.runnerThread = QThread()
             self.runnerThread.start()
             if self.verbose:
                 print(taskList)
@@ -1352,37 +1471,70 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.checkSuccessful = False
         self.resultsWin = resultsWindow()
 
-        self.resultsWin.resultsList.setColumnCount(4 + len(blastList) + len(hmmList))
-        self.resultsWin.resultsList.setHorizontalHeaderItem(0, QTableWidgetItem("Species/Accession ID"))
-        self.resultsWin.resultsList.setHorizontalHeaderItem(1, QTableWidgetItem("Start"))
-        self.resultsWin.resultsList.setHorizontalHeaderItem(2, QTableWidgetItem("End"))
-        self.resultsWin.resultsList.setHorizontalHeaderItem(3, QTableWidgetItem("Size"))
+        self.resultsWin.resultsList.setColumnCount(5 + len(blastList) + len(hmmList))
+        self.resultsWin.resultsList.setHorizontalHeaderItem(0, QTableWidgetItem(""))
+        self.resultsWin.resultsList.setHorizontalHeaderItem(1, QTableWidgetItem("Species/Accession ID"))
+        self.resultsWin.resultsList.setHorizontalHeaderItem(2, QTableWidgetItem("Start"))
+        self.resultsWin.resultsList.setHorizontalHeaderItem(3, QTableWidgetItem("End"))
+        self.resultsWin.resultsList.setHorizontalHeaderItem(4, QTableWidgetItem("Size"))
         for idx, blastHit in enumerate(blastList):
             if self.verbose:
                 print(idx, blastHit)
-            self.resultsWin.resultsList.setHorizontalHeaderItem(idx + 4, QTableWidgetItem(blastHit))
+            self.resultsWin.resultsList.setHorizontalHeaderItem(idx + 5, QTableWidgetItem(blastHit))
         for idx, hmmHit in enumerate(hmmList):
             if self.verbose: print(idx,' and '.join(hmmHit))
-            self.resultsWin.resultsList.setHorizontalHeaderItem(idx + len(blastList) + 4,
+            self.resultsWin.resultsList.setHorizontalHeaderItem(idx + len(blastList) + 5,
                                                           QTableWidgetItem(' and '.join(hmmHit)))
         for cluster, hitDict in filteredClusters.items():
             currentRowCount = self.resultsWin.resultsList.rowCount()
             self.resultsWin.resultsList.insertRow(currentRowCount)
-            self.resultsWin.resultsList.setItem(currentRowCount, 0, QTableWidgetItem(cluster[0]))
-            self.resultsWin.resultsList.setItem(currentRowCount, 1, QTableWidgetItem(str(cluster[1])))
-            self.resultsWin.resultsList.setItem(currentRowCount, 2, QTableWidgetItem(str(cluster[2])))
-            self.resultsWin.resultsList.setItem(currentRowCount, 3, QTableWidgetItem(str(cluster[2]-cluster[1]+1)))
+            checkbox = QTableWidgetItem()
+            checkbox.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEditable | Qt.ItemIsEnabled)
+            checkbox.setCheckState(0)
+            self.resultsWin.resultsList.setItem(currentRowCount,0,checkbox)
+            self.resultsWin.resultsList.setItem(currentRowCount, 1, QTableWidgetItem(cluster[0]))
+            self.resultsWin.resultsList.setItem(currentRowCount, 2, QTableWidgetItem(str(cluster[1])))
+            self.resultsWin.resultsList.setItem(currentRowCount, 3, QTableWidgetItem(str(cluster[2])))
+            self.resultsWin.resultsList.setItem(currentRowCount, 4, QTableWidgetItem(str(cluster[2]-cluster[1]+1)))
             for idx, blastHit in enumerate(blastList):
-                self.resultsWin.resultsList.setItem(currentRowCount, idx + 4,
+                self.resultsWin.resultsList.setItem(currentRowCount, idx + 5,
                                               QTableWidgetItem('; '.join(filteredClusters[cluster].get(blastHit,''))))
             for idx, hmmHit in enumerate(hmmList):
-                self.resultsWin.resultsList.setItem(currentRowCount, idx + len(blastList) + 4,
+                self.resultsWin.resultsList.setItem(currentRowCount, idx + len(blastList) + 5,
                                               QTableWidgetItem('; '.join(filteredClusters[cluster].get(hmmHit,''))))
 
         self.resultsWin.resultsList.resizeColumnsToContents()
-        self.resultsWin.exportResults.clicked.connect(self.exportResults)
+        self.resultsWin.exportSummaryResultsBtn.clicked.connect(self.exportResultsSummary)
+        self.resultsWin.selectGbkExportDirBtn.clicked.connect(self.selectGbkExportDir)
+        self.resultsWin.exportSelectedGbkBtn.clicked.connect(self.exportSelectedGbk)
         self.resultsWin.show()
-    def exportResults(self):
+
+    def exportSelectedGbk(self):
+        gbksToExport = []
+        for idx in range(self.resultsWin.resultsList.rowCount()):
+            if self.verbose:
+                print(idx,self.resultsWin.resultsList.item(idx, 0).checkState())
+            if self.resultsWin.resultsList.item(idx, 0).checkState() == 2:
+                gbksToExport.append((self.resultsWin.resultsList.item(idx,1).text(), # ACC ID
+                                     int(self.resultsWin.resultsList.item(idx,2).text()), # Start
+                                     int(self.resultsWin.resultsList.item(idx, 3).text()))) # End
+        if self.verbose:
+            print(gbksToExport)
+
+    def selectGbkExportDir(self):
+        dirName = QFileDialog.getExistingDirectory()
+        if dirName:
+            if os.access(dirName, os.W_OK):
+               self.resultsWin.gbkExportDlDir.setText(dirName)
+               self.resultsWin.exportSelectedGbkBtn.setEnabled(True)
+            else:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setText("Can't Write to that Folder. Please Specify Another Directory")
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec()
+
+    def exportResultsSummary(self):
         totalFilePath, _ = QFileDialog.getSaveFileName(caption="Export Search Results",filter='*.csv')
         if totalFilePath:
             path,fileName = os.path.split(totalFilePath)
@@ -1407,7 +1559,8 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
     def runChecks(self):
         if self.searchList.rowCount() >= 1:
             if not self.checkSuccessful:
-                self.runnerThread = QThread()
+                if not self.runnerThread:
+                    self.runnerThread = QThread()
                 self.runnerThread.start()
 
                 self.checkSuccessful = False
@@ -1740,117 +1893,20 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 if not self.runnerThread:
                     self.runnerThread = QThread()
                 self.runnerThread.start()
-                if self.totalHitsRequired == len(requiredBlastList) + len(requiredHmmList) :
-                    self.processSearchListWorker = runProcessSearchList(requiredBlastList, requiredHmmList, blastOutFile, hmmOutFile,
-                                                                        self.nameToParamDict['hmmScore'],
-                                                                        self.nameToParamDict['hmmDomLen'],
-                                                                        self.nameToParamDict['windowSize'])
-                    self.processSearchListWorker.result.connect(
-                        lambda x: self.generateResults(x, self.statusWin, requiredBlastList, requiredHmmList))
-                    self.processSearchListWorker.moveToThread(self.runnerThread)
-                    self.processSearchListWorker.start.connect(self.processSearchListWorker.run)
-                    self.processSearchListWorker.start.emit()
-                else:
-                    self.processSearchListWorker = runProcessSearchListOptionalHits(requiredBlastList,requiredHmmList,
+                self.processSearchListWorker = runProcessSearchListOptionalHits(requiredBlastList,requiredHmmList,
                                                                                     blastOutFile,hmmOutFile,
                                                                                     self.nameToParamDict['hmmScore'],
                                                                                     self.nameToParamDict['hmmDomLen'],
                                                                                     self.nameToParamDict['windowSize'],
                                                                                     self.totalHitsRequired,
                                                                                     optionalBlastList,optionalHmmList)
-                    self.processSearchListWorker.result.connect(
+                self.processSearchListWorker.result.connect(
                         lambda x: self.generateResults(x, self.statusWin,requiredBlastList+optionalBlastList,
                                                        requiredHmmList+optionalHmmList))
-                    self.processSearchListWorker.moveToThread(self.runnerThread)
-                    self.processSearchListWorker.start.connect(self.processSearchListWorker.run)
-                    self.processSearchListWorker.start.emit()
-
-    def processResults(self):
-        self.updateStatusWinText(self.statusWin, 'Parsing Output Files: Creating Search Lists', '4/6', 4)
-        if self.checkSuccessful and self.blastSuccessful and self.hmmerSuccessful:
-            blastList = []
-            hmmList = []
-
-            blastOutFile = self.outputDir + "/blast_results.out"
-            hmmOutFile = self.outputDir + '/hmmSearch.out'
-
-            for idx in range(self.searchList.rowCount()):
-                if self.searchList.item(idx, 0).text() == 'HMMER Hits':
-                    hmmList.append(tuple(sorted(self.searchList.item(idx, 1).text().split(' and '))))
-                elif self.searchList.item(idx, 0).text() == 'GENE':
-                    blastList.append(self.searchList.item(idx, 1).text())
-
-            passBLASTcheck = False
-            passHMMcheck = False
-
-            ### Final Checks before Passing on to Parsers
-            if len(blastList) + len(hmmList) == 0:
-                msg = QMessageBox()
-                msg.setIcon(QMessageBox.Critical)
-                msg.setText('No HMM Hits or Genes Included in Search List')
-                msg.setStandardButtons(QMessageBox.Ok)
-                msg.exec()
-                self.statusWin.close()
-                self.checkSuccessful = False
-                if self.runnerThread:
-                    self.runnerThread.terminate()
-                return
-            else:
-                if blastList:
-                    try:
-                        assert os.path.isfile(blastOutFile), "BLAST Hits included in search but no " \
-                                                             "BLAST output file found"
-                        passBLASTcheck = True
-                    except AssertionError:
-                        msg = QMessageBox()
-                        msg.setIcon(QMessageBox.Critical)
-                        msg.setText('BLAST Hits included in search but no BLAST output file found!')
-                        msg.setStandardButtons(QMessageBox.Ok)
-                        msg.exec()
-                        self.statusWin.close()
-                        self.checkSuccessful = False
-                        if self.runnerThread:
-                            self.runnerThread.terminate()
-                        return
-                else:
-                    passBLASTcheck = True
-                if hmmList:
-                    try:
-                        assert os.path.isfile(hmmOutFile), "HMMer Hits included in search but no " \
-                                                                             "HMMer output file found"
-                        passHMMcheck = True
-                    except AssertionError:
-                        msg = QMessageBox()
-                        msg.setIcon(QMessageBox.Critical)
-                        msg.setText('HMMer Hits requested in search but no HMMer output file found!')
-                        msg.setStandardButtons(QMessageBox.Ok)
-                        msg.exec()
-                        self.statusWin.close()
-                        self.checkSuccessful = False
-                        if self.runnerThread:
-                            self.runnerThread.terminate()
-                        return
-
-                else:
-                    passHMMcheck = True
-            if passBLASTcheck and passHMMcheck:
-                self.updateStatusWinText(self.statusWin,
-                                         'Output Files Parsed. Searching for Clusters.\n'
-                                         '(Minimum Domain Score: %i, Minimum Domain Length: %i Window Size: %i)'
-                    % (self.nameToParamDict['hmmScore'],self.nameToParamDict['hmmDomLen'],self.nameToParamDict['windowSize']),
-                                         '5/6', 5)
-                if not self.runnerThread:
-                    self.runnerThread = QThread()
-                self.runnerThread.start()
-                self.processSearchListWorker = runProcessSearchList(blastList, hmmList, blastOutFile, hmmOutFile,
-                                                                    self.nameToParamDict['hmmScore'],
-                                                                    self.nameToParamDict['hmmDomLen'],
-                                                                    self.nameToParamDict['windowSize'])
-                self.processSearchListWorker.result.connect(
-                    lambda x: self.generateResults(x, self.statusWin, blastList, hmmList))
                 self.processSearchListWorker.moveToThread(self.runnerThread)
                 self.processSearchListWorker.start.connect(self.processSearchListWorker.run)
                 self.processSearchListWorker.start.emit()
+
     @pyqtSlot(dict)
     def generateResults(self,filteredClusters,statusWin,blastList,hmmList):
         self.setEnabled(True)
