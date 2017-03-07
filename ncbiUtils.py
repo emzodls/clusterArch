@@ -1,8 +1,8 @@
 import urllib.request
 import xml.etree.ElementTree as etree
-import os,timeit
-import wget
+import os
 from ftplib import FTP
+from math import floor,ceil
 
 def ncbiQuery(keyword,organism,accession,minLength=0,maxLength=10000000000,retmax=1000,db='nuccore'):
     if not keyword and not organism and not accession:
@@ -118,12 +118,9 @@ def accToFasta(accList,db,outputfolder):
     idList = list(acc2gi.values())
     idChunks = [idList[x:x + 100] for x in range(0, len(acc2gi), 100)]
     for dataChunk in idChunks:
-        print(dataChunk)
         fetchURL = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db={}&id={}" \
                    "&retmode=text&rettype=fasta&retmax=251&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(
             db, ','.join(str(gi) for gi in dataChunk))
-        print(fetchURL)
-
         ## from Eli Korvigo in biostars (https://www.biostars.org/p/66921/) modified because i'm using urllib
         def extract_records(records_handle):
             buffer = []
@@ -209,12 +206,65 @@ def parseAssemblyReportFile(database,division,keyword=None,categoryFilters=None)
         print(e)
         return
 
+def fetchGbksWithAcc(clusterList,window,outputFolder,guiSignal=None):
+    # cluster list format (acc,(start,end))
+    dlList = set()
+    for acc,coordinates in clusterList:
+        esearchURL = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db={}&term={}[accn]" \
+                     "&retmode=text&retmax=10&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format('nuccore',acc)
+        try:
+            ncbiRequest = urllib.request.urlopen(esearchURL)
+            parseRequest = etree.parse(ncbiRequest)
+            ncbiID = [idElem.text for idElem in parseRequest.iter('Id')][0]
+            clusterMidpoint = sum(coordinates)/2
+            window_start = floor(max(1,clusterMidpoint- window/2))
+            window_end = ceil(clusterMidpoint + window/2)
+            fetchURL = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id={}" \
+                   "&retmode=text&rettype=gbwithparts&strand=1&seq_start={}&seq_stop={}" \
+                   "&retmax=251&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(ncbiID,window_start,window_end)
+            fetchReq = urllib.request.urlopen(fetchURL)
+            buffer = []
+            for line in fetchReq:
+                line = line.decode()
+                buffer.append(line)
+                if line.startswith('DEFINITION'):
+                    ## try to parse the species name from the definition
+                    summary = line.split('DEFINITION')[1].strip().split(',')[0].strip()
+
+            with open(os.path.join(outputFolder,'{}-{}-{}.gbk'.format(acc,window_start,window_end)),'w') as gbkFile:
+                gbkFile.write(''.join(buffer))
+            if guiSignal:
+                guiSignal.emit((acc,ncbiID,summary))
+            dlList.add((acc,ncbiID,summary))
+        except:
+            if guiSignal:
+                guiSignal.emit((acc,None,None))
+            dlList.add((acc,None,None))
+    dlSuccess = set(entry for entry in dlList if entry[2])
+    dlFail = set(entry for entry in dlList if not entry[2])
+    with open(os.path.join(outputFolder, 'downloadSummary.txt'), 'w') as summaryFile:
+        summaryFile.write('Failed to Resolve:\n')
+        for entry,blank,blank2 in dlFail:
+            summaryFile.write('{}\n'.format(entry))
+        summaryFile.write('Downloaded:\n')
+        for fileNameAcc,gi,summary in dlSuccess:
+            summaryFile.write('{},{},{}\n'.format(fileNameAcc, gi,summary))
+    return dlList
+
 
 
 if __name__ == '__main__':
-    accList = set(x.strip() for x in open('/Volumes/Data/accList.txt'))
-    accToFasta(accList, 'protein', '/Volumes/Data/gbnA')
-    print(len(test),test)
+    clusterList = []
+
+    for line in open('/Volumes/Data/lola_AS3/antimycin_ozmN/hits_genomesGB.csv'):
+        if '##' in line:
+            pass
+        else:
+            lineParse = line.split(',')
+            clusterList.append((lineParse[0],(int(lineParse[1]),int(lineParse[2]))))
+    print(clusterList)
+    test = fetchGbksWithAcc(clusterList[:10], 100000, '/Volumes/Data/lola_AS3/antimycin_ozmN/testDL', guiSignal=None)
+    print(test)
     # names,sizes = zip(*getGbkDlList('ENV'))
     # print(names,sum(sizes))
     #print(sum(x[1] for x in test))

@@ -386,31 +386,55 @@ def processGbkDivFile(gbkDivFile,database,guiSignal=None):
             guiSignal.emit('Failed')
         raise Exception
 
-def proccessGbks(taskList,outputDir,signal):
+def proccessGbks(taskList,outputDir,guiSignal=None):
     # make sure species list is unique
     speciesList = set()
+    failedToProcess = []
     for gbkFile in taskList:
         try:
             genbank_entries = SeqIO.parse(open(gbkFile), "genbank")
             path,fileName = os.path.split(gbkFile)
             species_base,ext = os.path.splitext(fileName)
-            signal.emit(fileName)
+            if guiSignal:
+                guiSignal.emit(fileName)
             CDS_prot_outfile_name = outputDir
             cds_ctr = 0
             entry_ctr = 1
             # See if user wants a different name
             for genbank_entry in genbank_entries:
+                clusterNumber = None
                 prot_seqs = []
                 species_id = genbank_entry.id
                 if species_id in speciesList:
                     species_id = species_base + '.entry%.3i' % entry_ctr
                 # check for uniqueness, if there is already an entry on the list insert random number
+                ## Check if it is an antismash file
+                clusters = [cluster for cluster in genbank_entry.features if cluster.type == 'cluster']
+                ## if it is specifically only has 1 antismash cluster, tag it as such with the species ID and clustertype
+                if len(clusters) == 1 and entry_ctr == 1:
+                    cluster = clusters[0]
+                    try:
+                        clusterNumber = cluster.qualifiers['note'][0].split(':')[1].strip()
+                    except:
+                        clusterNumber = None
+                    if clusterNumber:
+                        species_id += '.antismashCluster{}'.format(clusterNumber)
+                    if 'product' in cluster.qualifiers.keys():
+                        productID = cluster.qualifiers['product'][0].split()
+                        productID = ''.join(productID)
+                        # only get top 4
+                        productID = productID.split('-')
+                        endIdx = min(len(productID),4)
+                        productID = '-'.join(productID[:endIdx])
+                        species_id += '.{}'.format(productID).strip()
+                species_id = species_id.strip()
                 if species_id in speciesList:
                     splitSpecies = species_id.split('.entry')[0]
-                    species_id = splitSpecies + '%.5i.'+'.entry%.3i' % ((random()*10000),entry_ctr)
+                    species_id = splitSpecies + '%.5i.entry%.3i'.format((random()*10000),entry_ctr)
                     speciesList.add(species_id)
                 else:
                     speciesList.add(species_id)
+
                 CDS_list = (feature for feature in genbank_entry.features if feature.type == 'CDS')
                 for CDS in CDS_list:
                     cds_ctr += 1
@@ -469,16 +493,18 @@ def proccessGbks(taskList,outputDir,signal):
                     if len(prot_seq) > 0:
                         prot_entry = SeqRecord(prot_seq, id='%s|%i-%i|%s|%s|%s' % (species_id, gene_start + 1,
                                                                                    gene_end, direction_id,
-                                                                                   internal_id, protein_id),
-                                               description='%s in %s' % (protein_id, species_id))
+                                                                                   internal_id, protein_id))
                         prot_seqs.append(prot_entry)
                 with open(CDS_prot_outfile_name, 'a') as outfile_handle:
                     SeqIO.write(prot_seqs, outfile_handle, 'fasta')
                 entry_ctr += 1
         except Exception as e:
-            signal.emit('Error Making Database on %s \n '
-                        'Error Message: %s' % (fileName,str(e)))
-            raise
+            if guiSignal:
+                guiSignal.emit('Error Reading {}'.format(fileName))
+            failedToProcess.append(fileName)
+            print(gbkFile,e)
+            pass
+    return failedToProcess
 
 def ncbiGenomeFastaParser(fastaHandle):
     # returns a fasta dictionary with entry as title and sequence as output
@@ -561,9 +587,9 @@ def humanbytes(B):
       return '{0:.2f} TB'.format(B/TB)
 
 if __name__ == "__main__":
-    test = urllib.request.urlopen(
-        'https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/191/825/GCA_000191825.1_Trep_dent_F0402_V1/GCA_000191825.1_Trep_dent_F0402_V1_cds_from_genomic.fna.gz')
-    handle = gzip.open(test, mode='rt')
-    testDict = ncbiGenomeFastaParser(handle)
-    testRecs = [SeqRecord(seq,id=id) for id,seq in testDict.items()]
-    print(testRecs)
+    from glob import glob
+
+    os.chdir('/Volumes/Data/lola_latest_assemblies/allgbks')
+    taskList = glob('A159_AS4_SC01.*.gbk')
+    print(taskList)
+    proccessGbks(taskList, 'db.out', guiSignal=None)

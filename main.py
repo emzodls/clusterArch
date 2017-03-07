@@ -33,7 +33,7 @@ from utils import parseSeqFile,parseHMMfile,generateInputFasta,generateHMMdb,Mak
 from collections import Counter
 from glob import iglob,glob
 from itertools import chain
-from ncbiUtils import ncbiQuery,ncbiSummary,ncbiFetch,getGbkDlList,parseAssemblyReportFile
+from ncbiUtils import ncbiQuery,ncbiSummary,ncbiFetch,getGbkDlList,parseAssemblyReportFile,fetchGbksWithAcc
 
 import mainGuiNCBI,resultsWindow,status,parameters,sys,createDbStatus,addGene,downloadNcbiFilesWin,gbDivSumWin, ncbiGenomeSumWin,wget
 #### NCBI Query Functions
@@ -235,19 +235,16 @@ class downloadNcbiGenomesWorker(QObject):
 class createDbWorker(QObject):
     start = pyqtSignal()
     currentGbk = pyqtSignal(str)
-    finished = pyqtSignal()
+    finished = pyqtSignal(list)
     def __init__(self,taskList,dbPath):
         self.taskList = taskList
         self.dbPath = dbPath
         super(createDbWorker,self).__init__()
     @pyqtSlot()
     def run(self):
-        try:
-            proccessGbks(self.taskList,self.dbPath,self.currentGbk)
-            self.currentGbk.emit("Database Creation Successful!")
-            self.finished.emit()
-        except:
-            self.finished.emit()
+        processFailed = proccessGbks(self.taskList,self.dbPath,self.currentGbk)
+        self.finished.emit(processFailed)
+        return
 
 class runChecksWorker(QObject):
     checkError = pyqtSignal(str)
@@ -461,6 +458,25 @@ class runProcessSearchListOptionalHits(QObject):
                                                          self.hmmScore,self.hmmDomLen,self.windowSize,
                                                          self.totalHitsRequired,self.additionalBlastList,self.additionalHmmList)
         self.result.emit(filteredClusters)
+
+class exportSelectedGbWorker(QObject):
+    start = pyqtSignal()
+    currentFile = pyqtSignal(tuple)
+    finished = pyqtSignal(set)
+
+    def __init__(self,gbksToExport,windowSize,outputDir):
+        self.gbksToExport = gbksToExport
+        self.windowSize = windowSize
+        self.outputDir = outputDir
+        super(exportSelectedGbWorker,self).__init__()
+
+    @pyqtSlot()
+    @pyqtSlot(tuple)
+    @pyqtSlot(set)
+    def run(self):
+        dlSummary = fetchGbksWithAcc(self.gbksToExport,self.windowSize,self.outputDir,guiSignal=self.currentFile)
+        self.finished.emit(dlSummary)
+        return
 
 class downloadNcbiFilesWindow(QWidget,downloadNcbiFilesWin.Ui_downloadNcbiWin):
     def __init__(self):
@@ -962,11 +978,11 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
 
     def gbProcessFileFinished(self,processFailed,dlFailed):
         self.genbankDivFilesStatusWin.title.setText('Database Completed!')
-        self.genbankDivFilesStatusWin.doneBtn.setEnabled(True)
         self.setEnabled(True)
         if self.runnerThread:
             self.runnerThread.terminate()
         self.displayGbDivSummary(processFailed,dlFailed)
+        self.genbankDivFilesStatusWin.close()
 
     def displayGbDivSummary(self,processFailed,dlFailed):
         self.gbDivDlSummaryWin = gbDivSummaryWindow()
@@ -979,7 +995,40 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             self.gbDivDlSummaryWin.processFailedList.addItem(processFailedFile)
         # Reset DL List
         self.gbDivFilesToDlList = []
+        self.gbDivDlSummaryWin.saveSummaryBtn.clicked.connect(self.saveGbDlSummary)
         self.gbDivDlSummaryWin.show()
+
+    def saveGbDlSummary(self):
+        dirTarget, _ = QFileDialog.getSaveFileName(caption="Specify Save Location", filter='*.clusterToolSummary.txt')
+        if dirTarget:
+            dirName,fileName = os.path.split(dirTarget)
+            if not fileName.endswith('.txt'):
+                fileName += '.txt'
+            if dirName and os.access(dirName, os.W_OK):
+                dlList = [self.gbDivDlSummaryWin.dlList.item(idx).text()
+                          for idx in range(self.gbDivDlSummaryWin.dlList.count())]
+                dlFailedList = [self.gbDivDlSummaryWin.dlFailedList.item(idx).text()
+                          for idx in range(self.gbDivDlSummaryWin.dlFailedList.count())]
+                processFailedList = [self.gbDivDlSummaryWin.processFailedList.item(idx).text()
+                          for idx in range(self.gbDivDlSummaryWin.processFailedList.count())]
+                with open(os.path.join(dirName,fileName),'w') as outfile:
+                    outfile.write('## Files to Download\n')
+                    outfile.write('\n'.join(dlList))
+                    outfile.write('\n## Failed Downloads\n')
+                    outfile.write('\n'.join(dlFailedList))
+                    outfile.write('\n## Failed in Processing\n')
+                    outfile.write('\n'.join(processFailedList))
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Information)
+                msg.setText("Wrote Summary File: {}".format(fileName))
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec()
+            else:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setText("Can't Write to that Folder")
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec()
 
     ###########################
     ### NCBI Genomes DB Functions ####
@@ -1041,9 +1090,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
 
     def genomeQueryFinished(self,genomeDict,allChecked):
         if allChecked:
-            self.genomeQueryStatusWin.currentTask.setText('Query Done. \n All Divisions Successfully Read.')
-            self.genomeQueryStatusWin.viewResultsBtn.clicked.connect(self.genomeQueryStatusWin.close)
-            self.genomeQueryStatusWin.viewResultsBtn.setEnabled(True)
+            self.genomeQueryStatusWin.close()
             self.ncbiGenomeSearchDict = {**self.ncbiGenomeSearchDict,**genomeDict}
             for acc, species in self.ncbiGenomeSearchDict.values():
                 if acc in self.ncbiGenomeSearchSet:
@@ -1187,8 +1234,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             else:
                 saveFasta = False
             self.ncbiGenomeDlWorker = downloadNcbiGenomesWorker(self.ncbiGenomeDlDict,ncbiGenomeDlDir,saveFastas=saveFasta)
-            self.ncbiGenomeDlStatusWin.doneBtn.clicked.connect(self.ncbiGenomeDlStatusWin.close)
-
+            self.ncbiGenomeDlStatusWin.doneBtn.setVisible(False)
             self.ncbiGenomeDlStatusWin.cancelBtn.clicked.connect(
                 lambda: self.abortSearch(self.ncbiGenomeDlStatusWin, self.runnerThread,self.ncbiGenomeDlWorker))
 
@@ -1201,6 +1247,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             self.ncbiGenomeDlWorker.finished.connect(lambda x: self.ncbiGenomeDlFinished(x))
             self.ncbiGenomeDlWorker.start.emit()
         return
+
     def updateCurrentGenomeDlFile(self,currentFile):
         self.ncbiGenomeDlStatusWin.currentTask.setText(currentFile)
         self.ncbiGenomeDlStatusWin.progressBar.setValue(self.ncbiGenomeDlStatusWin.progressBar.value() + 1)
@@ -1208,7 +1255,6 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                                                                        self.ncbiGenomeDlStatusWin.progressBar.maximum()))
     def ncbiGenomeDlFinished(self,failedList):
         self.ncbiGenomeDlStatusWin.title.setText('Database Completed!')
-        self.ncbiGenomeDlStatusWin.doneBtn.setEnabled(True)
         self.ncbiGenomeDlList.clear()
         self.ncbiGenomesSearchResults.clear()
         self.ncbiGenomeSearchSet = set()
@@ -1217,6 +1263,9 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         if self.runnerThread:
             self.runnerThread.terminate()
         self.displayNcbiDlSummary(failedList)
+        self.genomeDlCtr.setText(str(len(self.ncbiGenomeDlDict)))
+        self.genomeSearchCtr.setText(str(len(self.ncbiGenomeSearchDict)))
+        self.ncbiGenomeDlStatusWin.close()
 
     def displayNcbiDlSummary(self,failedList):
         self.ncbiGenomeSummaryWin = ncbiGenomeSummaryWin()
@@ -1228,7 +1277,36 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.ncbiGenomeDlDict = dict()
         for (acc, species) in failedList:
             self.ncbiGenomeSummaryWin.dlFailedList.addItem('{} : {}'.format(acc, species))
+        self.ncbiGenomeSummaryWin.saveSummaryBtn.clicked.connect(self.saveNcbiGenomeDlSummary)
         self.ncbiGenomeSummaryWin.show()
+
+    def saveNcbiGenomeDlSummary(self):
+        dirTarget, _ = QFileDialog.getSaveFileName(caption="Specify Save Location", filter='*.clusterToolSummary.txt')
+        if dirTarget:
+            dirName,fileName = os.path.split(dirTarget)
+            if not fileName.endswith('.txt'):
+                fileName += '.txt'
+            if dirName and os.access(dirName, os.W_OK):
+                dlList = [self.ncbiGenomeSummaryWin.dlList.item(idx).text()
+                          for idx in range(self.ncbiGenomeSummaryWin.dlList.count())]
+                failedList = [self.ncbiGenomeSummaryWin.dlFailedList.item(idx).text()
+                          for idx in range(self.ncbiGenomeSummaryWin.dlFailedList.count())]
+                with open(os.path.join(dirName,fileName),'w') as outfile:
+                    outfile.write('## Files to Download\n')
+                    outfile.write('\n'.join(dlList))
+                    outfile.write('\n## Failed Downloads\n')
+                    outfile.write('\n'.join(failedList))
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Information)
+                msg.setText("Wrote Summary File: {}".format(fileName))
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec()
+            else:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setText("Can't Write to that Folder")
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec()
 
 ############################################
 
@@ -1433,11 +1511,14 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             self.createDbStatusWin.doneBtn.clicked.connect(self.createDbStatusWin.close)
             self.createDbStatusWin.cancelBtn.clicked.connect(lambda: self.abortSearch(self.createDbStatusWin,
                                                                                       self.runnerThread,self.createDbWorker))
+            self.createDbStatusWin.doneBtn.setVisible(False)
+            self.createDbStatusWin.cancelBtn.setVisible(False)
+
             self.createDbStatusWin.progressBar.setMaximum(int(self.totalFiles.text()))
             self.createDbWorker.moveToThread(self.runnerThread)
             self.createDbWorker.start.connect(self.createDbWorker.run)
             self.createDbWorker.currentGbk.connect(self.updateCurrentGbk)
-            self.createDbWorker.finished.connect(self.createDbSuccessful)
+            self.createDbWorker.finished.connect(lambda x: self.createDbFinished(x,taskList))
             self.createDbWorker.start.emit()
             self.createDbStatusWin.show()
 
@@ -1446,12 +1527,26 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.createDbStatusWin.progressBar.setValue(self.createDbStatusWin.progressBar.value()+1)
         self.createDbStatusWin.percentLabel.setText("{}/{}".format(self.createDbStatusWin.progressBar.value(),
                                                                    self.totalFiles.text()))
-    def createDbSuccessful(self):
+    def createDbFinished(self,processFailed,taskList):
         self.genbankList.clear()
-        self.createDbStatusWin.doneBtn.setEnabled(True)
-        self.setEnabled(True)
+        self.createDbStatusWin.currentTask.setText('Finished with Tasklist, Please Wait')
+        self.createDbStatusWin.close()
+        self.createDbSummaryWin = ncbiGenomeSummaryWin()
+        # populate lists
+        for entry in taskList:
+            path,fileName = os.path.split(entry)
+            self.createDbSummaryWin.dlList.addItem(fileName)
+        for entry in processFailed:
+            self.createDbSummaryWin.dlFailedList.addItem(entry)
+        self.createDbSummaryWin.saveSummaryBtn.setVisible(False)
+        self.createDbSummaryWin.label.setText('Files to Process:')
+        self.createDbSummaryWin.label_2.setText('Failed to Process:')
+        self.createDbSummaryWin.show()
         if self.runnerThread:
             self.runnerThread.terminate()
+        self.totalFiles.setText('0')
+        self.dbOutputDir.setText('')
+        self.setEnabled(True)
 
     ##############################################################################################
     ### Status Window Methods
@@ -1515,11 +1610,64 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             if self.verbose:
                 print(idx,self.resultsWin.resultsList.item(idx, 0).checkState())
             if self.resultsWin.resultsList.item(idx, 0).checkState() == 2:
+                # (acc,(start,end))
                 gbksToExport.append((self.resultsWin.resultsList.item(idx,1).text(), # ACC ID
-                                     int(self.resultsWin.resultsList.item(idx,2).text()), # Start
-                                     int(self.resultsWin.resultsList.item(idx, 3).text()))) # End
+                                     (int(self.resultsWin.resultsList.item(idx,2).text()), # Start
+                                     int(self.resultsWin.resultsList.item(idx, 3).text())))) # End
         if self.verbose:
             print(gbksToExport)
+        if not self.runnerThread:
+            self.runnerThread = QThread()
+        self.runnerThread.start()
+        self.exportGbkStatusWin = downloadNcbiFilesWindow()
+
+        outputDir = self.resultsWin.gbkExportDlDir.text()
+        windowSize = int(self.resultsWin.gbDlWindowSize.text())
+
+        self.exportSelectedGbWorker = exportSelectedGbWorker(gbksToExport,windowSize,outputDir)
+
+        self.exportGbkStatusWin.progressBar.setMaximum(int(len(gbksToExport)))
+        self.exportGbkStatusWin.progressBar.setValue(0)
+        self.exportGbkStatusWin.cancelBtn.setVisible(False)
+        self.exportGbkStatusWin.doneBtn.setVisible(False)
+        self.setEnabled(False)
+        self.resultsWin.setEnabled(False)
+        self.exportGbkStatusWin.show()
+
+        self.exportSelectedGbWorker.moveToThread(self.runnerThread)
+
+        self.exportSelectedGbWorker.start.connect(self.exportSelectedGbWorker.run)
+        self.exportSelectedGbWorker.currentFile.connect(self.updateExportGbkCurrentFile)
+        self.exportSelectedGbWorker.finished.connect(lambda x: self.displayGbExportSummary(x))
+        self.exportSelectedGbWorker.start.emit()
+
+    def updateExportGbkCurrentFile(self,currentTask):
+        self.exportGbkStatusWin.progressBar.setValue(self.exportGbkStatusWin.progressBar.value() + 1)
+        self.exportGbkStatusWin.progressLabel.setText('{}/{}'.format(self.exportGbkStatusWin.progressBar.value(),
+                                                                       self.exportGbkStatusWin.progressBar.maximum()))
+        if currentTask[1]:
+            self.exportGbkStatusWin.currentTask.setText('{} : {}'.format(currentTask[0],currentTask[1]))
+        else:
+            self.exportGbkStatusWin.currentTask.setText('Failed to Find ACC ID: {}'.format(currentTask[0]))
+
+    def displayGbExportSummary(self,dlSummary):
+        self.exportGbkStatusWin.close()
+        self.exportGenomeSummaryWin = ncbiGenomeSummaryWin()
+        dlSuccess = set(entry for entry in dlSummary if entry[2])
+        dlFail = set(entry for entry in dlSummary if not entry[2])
+        # populate lists
+        for fileNameAcc,gi,summary in dlSuccess:
+            self.exportGenomeSummaryWin.dlList.addItem('{} : {}'.format(fileNameAcc,summary))
+        for entry,blank,blank2 in dlFail:
+            self.exportGenomeSummaryWin.dlFailedList.addItem(entry)
+        self.exportGenomeSummaryWin.saveSummaryBtn.setVisible(False)
+        self.exportGenomeSummaryWin.label.setText('Successfully Downloaded:')
+        self.exportGenomeSummaryWin.label_2.setText('Failed to Find:')
+        self.exportGenomeSummaryWin.show()
+        if self.runnerThread:
+            self.runnerThread.terminate()
+        self.resultsWin.setEnabled(True)
+        self.setEnabled(True)
 
     def selectGbkExportDir(self):
         dirName = QFileDialog.getExistingDirectory()
@@ -1541,12 +1689,16 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             if os.access(path, os.W_OK):
                 with open(totalFilePath, 'w') as stream:
                     writer = csv.writer(stream)
+                    # first column is blank for the checkbox
                     rowData = [self.resultsWin.resultsList.horizontalHeaderItem(idx).text().strip()
-                               for idx in range(self.resultsWin.resultsList.columnCount())]
+                               for idx in range(1,self.resultsWin.resultsList.columnCount())]
+                    ## Add hash for comments to ease in parsing later on
+                    rowData[0] = '##' + rowData[0]
                     writer.writerow(rowData)
+
                     for rowIdx in range(self.resultsWin.resultsList.rowCount()):
                         rowData = [self.resultsWin.resultsList.item(rowIdx, colIdx).text().strip()
-                                   for colIdx in range(self.resultsWin.resultsList.columnCount())]
+                                   for colIdx in range(1,self.resultsWin.resultsList.columnCount())]
                         writer.writerow(rowData)
             else:
                 msg = QMessageBox()
