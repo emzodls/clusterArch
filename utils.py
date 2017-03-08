@@ -588,8 +588,10 @@ def humanbytes(B):
 
 if __name__ == "__main__":
     from glob import glob
-
-    os.chdir('/Volumes/Data/lola_latest_assemblies/allgbks')
-    taskList = glob('A159_AS4_SC01.*.gbk')
-    print(taskList)
-    proccessGbks(taskList, 'db.out', guiSignal=None)
+    os.chdir('/Volumes/Internal HD/Users/emzodls/genbankDivDL')
+    taskList = glob('/Volumes/Internal HD/Users/emzodls/genbankDivDL/gbbct309GBKs/*gbk')
+    proccessGbks(taskList, 'gbbct309.fasta', guiSignal=None)
+    # outputFolder = '/Volumes/Internal HD/Users/emzodls/genbankDivDL/gbbct309GBKs'
+    # for accession, record in extract_records(open('gbbct309.gb')):
+    #     with open(os.path.join(outputFolder, '{}.gbk'.format(accession)), 'w') as output:
+    #         output.write(record)

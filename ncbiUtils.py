@@ -73,7 +73,7 @@ def ncbiFetch(idList,outputFolder,chunkSize = 100,batchMode=True,ncbiDict={},gui
             def extract_records(records_handle):
                 buffer = []
                 for line in records_handle:
-                    line = line.decode()
+                    line = line.decode("utf-8", "ignore")
                     if line.startswith("LOCUS") and buffer:
                         # yield accession number and record
                         currentAcc = buffer[0].split()[1]
@@ -125,7 +125,7 @@ def accToFasta(accList,db,outputfolder):
         def extract_records(records_handle):
             buffer = []
             for line in records_handle:
-                line = line.decode()
+                line = line.decode("utf-8", "ignore")
                 if line.startswith(">") and buffer:
                     # yield accession number and record
                     print(buffer)
@@ -185,7 +185,7 @@ def parseAssemblyReportFile(database,division,keyword=None,categoryFilters=None)
         assemblyHandle = urllib.request.urlopen('https://ftp.ncbi.nlm.nih.gov/genomes/{}/{}/assembly_summary.txt'.format(database,division.lower()))
         genomeDict = dict()
         for line in assemblyHandle:
-            line = line.decode().strip()
+            line = line.decode("utf-8", "ignore").strip()
             if '#' in line:
                 pass
             else:
@@ -209,13 +209,18 @@ def parseAssemblyReportFile(database,division,keyword=None,categoryFilters=None)
 def fetchGbksWithAcc(clusterList,window,outputFolder,guiSignal=None):
     # cluster list format (acc,(start,end))
     dlList = set()
+    acc2ncbi = dict()
     for acc,coordinates in clusterList:
         esearchURL = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db={}&term={}[accn]" \
                      "&retmode=text&retmax=10&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format('nuccore',acc)
         try:
-            ncbiRequest = urllib.request.urlopen(esearchURL)
-            parseRequest = etree.parse(ncbiRequest)
-            ncbiID = [idElem.text for idElem in parseRequest.iter('Id')][0]
+            if acc not in acc2ncbi.keys():
+                ncbiRequest = urllib.request.urlopen(esearchURL)
+                parseRequest = etree.parse(ncbiRequest)
+                ncbiID = [idElem.text for idElem in parseRequest.iter('Id')][0]
+                acc2ncbi[acc] = ncbiID
+            else:
+                ncbiID = acc2ncbi[acc]
             clusterMidpoint = sum(coordinates)/2
             window_start = floor(max(1,clusterMidpoint- window/2))
             window_end = ceil(clusterMidpoint + window/2)
@@ -225,7 +230,7 @@ def fetchGbksWithAcc(clusterList,window,outputFolder,guiSignal=None):
             fetchReq = urllib.request.urlopen(fetchURL)
             buffer = []
             for line in fetchReq:
-                line = line.decode()
+                line = line.decode("utf-8", "ignore")
                 buffer.append(line)
                 if line.startswith('DEFINITION'):
                     ## try to parse the species name from the definition
@@ -255,14 +260,16 @@ def fetchGbksWithAcc(clusterList,window,outputFolder,guiSignal=None):
 
 if __name__ == '__main__':
     clusterList = []
+    #
+    # for line in open('/Volumes/Data/lola_AS3/antimycin_ozmN/hits_genomesGB.csv'):
+    #     if '##' in line:
+    #         pass
+    #     else:
+    #         lineParse = line.split(',')
+    #         clusterList.append((lineParse[0],(int(lineParse[1]),int(lineParse[2]))))
+    # print(clusterList)
+    clusterList = [('EF552687', (20505, 87657)), ('CP006871', (6578021, 6611567)), ('CP006871', (1405296, 1502258)), ('CP006871', (9179933, 9267062)), ('CP007574', (6209940, 6264994)), ('CP000249', (2320878, 2324816))]
 
-    for line in open('/Volumes/Data/lola_AS3/antimycin_ozmN/hits_genomesGB.csv'):
-        if '##' in line:
-            pass
-        else:
-            lineParse = line.split(',')
-            clusterList.append((lineParse[0],(int(lineParse[1]),int(lineParse[2]))))
-    print(clusterList)
     test = fetchGbksWithAcc(clusterList[:10], 100000, '/Volumes/Data/lola_AS3/antimycin_ozmN/testDL', guiSignal=None)
     print(test)
     # names,sizes = zip(*getGbkDlList('ENV'))

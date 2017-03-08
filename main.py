@@ -1646,7 +1646,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.exportGbkStatusWin.progressLabel.setText('{}/{}'.format(self.exportGbkStatusWin.progressBar.value(),
                                                                        self.exportGbkStatusWin.progressBar.maximum()))
         if currentTask[1]:
-            self.exportGbkStatusWin.currentTask.setText('{} : {}'.format(currentTask[0],currentTask[1]))
+            self.exportGbkStatusWin.currentTask.setText('{} : {}'.format(currentTask[0],currentTask[2]))
         else:
             self.exportGbkStatusWin.currentTask.setText('Failed to Find ACC ID: {}'.format(currentTask[0]))
 
@@ -1710,6 +1710,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
     ### Run Permissions Checks
     def runChecks(self):
         if self.searchList.rowCount() >= 1:
+            self.setEnabled(False)
             if not self.checkSuccessful:
                 if not self.runnerThread:
                     self.runnerThread = QThread()
@@ -1749,6 +1750,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             statusWin.close()
             if self.runnerThread:
                 self.runnerThread.terminate()
+            self.setEnabled(True)
         elif checkErr == 'noDBpath':
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
@@ -1758,6 +1760,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             statusWin.close()
             if self.runnerThread:
                 self.runnerThread.terminate()
+            self.setEnabled(True)
         elif checkErr == 'noWriteOutputDir':
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
@@ -1767,6 +1770,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             statusWin.close()
             if self.runnerThread:
                 self.runnerThread.terminate()
+            self.setEnabled(True)
         elif checkErr == 'noReadDB':
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
@@ -1776,6 +1780,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             statusWin.close()
             if self.runnerThread:
                 self.runnerThread.terminate()
+            self.setEnabled(True)
         elif checkErr == 'invalidDB':
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Critical)
@@ -1785,6 +1790,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             statusWin.close()
             if self.runnerThread:
                 self.runnerThread.terminate()
+            self.setEnabled(True)
         elif checkErr == 'entriesWarn':
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Warning)
@@ -1796,7 +1802,6 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             return
         elif checkErr == 'good':
             self.checkSuccessful = True
-            self.setEnabled(False)
             self.runBlast()
             return
     ### Run BLAST Methods
@@ -1876,6 +1881,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             statusWin.close()
             if self.runnerThread:
                 self.runnerThread.terminate()
+            self.setEnabled(True)
     @pyqtSlot(bool)
     def doneBLAST(self,flag,statusWin):
         if flag:
@@ -1893,6 +1899,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             statusWin.close()
             if self.runnerThread:
                 self.runnerThread.terminate()
+            self.setEnabled(True)
             return
     ### Run Hmmer Methods
     def runHmmer(self):
@@ -1942,6 +1949,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             statusWin.close()
             if self.runnerThread:
                 self.runnerThread.terminate()
+            self.setEnabled(True)
             return
     @pyqtSlot(bool)
     def hmmSuccessCheck(self,flag,statusWin):
@@ -1958,6 +1966,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             statusWin.close()
             if self.runnerThread:
                 self.runnerThread.terminate()
+            self.setEnabled(True)
     ### Process Filtered Clusters
     def processResultsOptionalHits(self):
         self.updateStatusWinText(self.statusWin, 'Parsing Output Files: Creating Search Lists', '4/6', 4)
@@ -2014,6 +2023,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                         self.checkSuccessful = False
                         if self.runnerThread:
                             self.runnerThread.terminate()
+                        self.setEnabled(True)
                         return
                 else:
                     passBLASTcheck = True
@@ -2032,8 +2042,8 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                         self.checkSuccessful = False
                         if self.runnerThread:
                             self.runnerThread.terminate()
+                        self.setEnabled(True)
                         return
-
                 else:
                     passHMMcheck = True
             if passBLASTcheck and passHMMcheck:
