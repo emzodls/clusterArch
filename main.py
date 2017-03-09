@@ -802,7 +802,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             self.setEnabled(False)
             alreadyDownloadedAcc = set(os.path.split(x)[1].split('.gbk')[0] for x in glob(os.path.join(ncbiFileDlDir,'*.gbk')))
             alreadyDownloadedGI = set(self.acc2gi[acc] for acc in alreadyDownloadedAcc if acc in self.acc2gi.keys())
-            alreadyDlGIDict = {gi:self.ncbiDLdict[gi][1] for gi in alreadyDownloadedGI}
+            alreadyDlGIDict = {gi:self.ncbiDLdict[gi][1] for gi in alreadyDownloadedGI if gi in self.ncbiDLdict.keys()}
             if self.verbose:
                 print(taskList,alreadyDownloadedGI,taskList&alreadyDownloadedGI)
             if len(taskList&alreadyDownloadedGI) > 1:
