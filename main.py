@@ -498,7 +498,7 @@ class addGeneWindow(QWidget,addGene.Ui_addGeneWindow):
     def __init__(self):
         super(self.__class__,self).__init__()
         self.setupUi(self)
-        regex = QRegularExpression('^[ACDEFGHIKLMNPQRSTVWYacdefghiklmnpqrstvwy]+$')
+        regex = QRegularExpression('^[ACDEFGHIKLMNPQRSTVWXYacdefghiklmnpqrstvwxy*]+$')
         self.AminoAcidValidator = QtGui.QRegularExpressionValidator(regex)
 
 class statusWindow(QWidget,status.Ui_runSearch):
@@ -644,6 +644,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.addGenefilePathBtn.clicked.connect(self.openGene)
         self.addHMMfilePathBtn.clicked.connect(self.openHmm)
         self.addGeneSeqBtn.clicked.connect(self.showAddGeneWin)
+        self.editGeneBtn.clicked.connect(self.showEditGeneWin)
         self.addGenefileBtn.clicked.connect(self.loadGeneFile)
         self.addHMMfilebtn.clicked.connect(self.loadHMMFile)
 
@@ -1309,11 +1310,66 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 msg.exec()
 
 ############################################
+    def showEditGeneWin(self):
+        self.editGeneWin = addGeneWindow()
+        self.editGeneWin.setWindowModality(Qt.WindowModal)
+        geneToEdit = self.geneList.currentItem().text()
+        seqToEdit = self.geneDict[geneToEdit]
+        self.editGeneWin.geneSequence.setText(seqToEdit)
+        self.editGeneWin.geneName.setText(geneToEdit)
+        self.editGeneWin.geneName.setEnabled(False)
+        self.editGeneWin.addGeneBtn.clicked.connect(lambda: self.editGeneSeq(geneToEdit,seqToEdit))
+        self.editGeneWin.closeBtn.setVisible(False)
+        self.editGeneWin.addGeneBtn.setText("Okay")
+        self.editGeneWin.setWindowTitle('Edit Gene')
+        self.editGeneWin.show()
+        ## Check that gene name doesn't conflict with
+
+    def editGeneSeq(self,geneToEdit,seqToEdit):
+        newGeneSeq = self.editGeneWin.geneSequence.toPlainText()
+        newGeneSeq = newGeneSeq.replace('\n','')
+        newGeneSeq = newGeneSeq.replace('\t', '')
+        newGeneSeq = ''.join(newGeneSeq.split())
+        newGeneSeq = newGeneSeq.strip()
+        newGeneSeq = newGeneSeq.upper()
+
+        seqToEdit = seqToEdit.replace('\n','')
+        seqToEdit = seqToEdit.replace('\t', '')
+        seqToEdit = ''.join(seqToEdit.split())
+        seqToEdit = seqToEdit.strip()
+
+        if newGeneSeq == seqToEdit:
+            self.geneDict[geneToEdit] = str(newGeneSeq)
+            self.editGeneWin.close()
+        else:
+            if self.editGeneWin.AminoAcidValidator.validate(newGeneSeq, 0)[0] == 2:
+                buttonReply = QMessageBox.question(self, 'Change Sequence',
+                                                   "Are you sure you want to change the sequence?",
+                                                   QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                if buttonReply == QMessageBox.Yes:
+                    self.geneDict[geneToEdit] = newGeneSeq
+                    if self.verbose:
+                        print("Value Changed:",
+                              geneToEdit, self.geneDict[geneToEdit])
+                    self.editGeneWin.close()
+                else:
+                    if self.verbose:
+                        print("No Changes")
+                    self.editGeneWin.geneSequence.setText(seqToEdit)
+            else:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Warning)
+                msg.setText('Please Enter A Valid Amino Acid Sequence')
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec()
+                self.editGeneWin.geneSequence.setText(seqToEdit)
 
     def showAddGeneWin(self):
         self.addGeneWin = addGeneWindow()
+        self.addGeneWin.setWindowModality(Qt.WindowModal)
         self.addGeneWin.addGeneBtn.clicked.connect(self.addGeneSeq)
         self.addGeneWin.show()
+
     def addGeneSeq(self):
         geneName = self.addGeneWin.geneName.text()
         geneSeqToAdd = self.addGeneWin.geneSequence.toPlainText()

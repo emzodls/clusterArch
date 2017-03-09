@@ -112,6 +112,7 @@ class Ui_Results(object):
     def retranslateUi(self, Results):
         _translate = QtCore.QCoreApplication.translate
         Results.setWindowTitle(_translate("Results", "Results"))
+        self.resultsList.setSortingEnabled(True)
         self.exportSummaryResultsBtn.setText(_translate("Results", "Save Results Summary"))
         self.closeBtn.setText(_translate("Results", "Close"))
         self.label.setText(_translate("Results", "Window Size:"))

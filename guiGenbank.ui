@@ -39,7 +39,7 @@
        </sizepolicy>
       </property>
       <property name="currentIndex">
-       <number>0</number>
+       <number>1</number>
       </property>
       <widget class="QWidget" name="prepareDatabase">
        <property name="sizePolicy">
@@ -58,7 +58,7 @@
         <item>
          <widget class="QToolBox" name="toolBox">
           <property name="currentIndex">
-           <number>0</number>
+           <number>3</number>
           </property>
           <property name="tabSpacing">
            <number>-1</number>
@@ -1623,7 +1623,7 @@
              </layout>
             </item>
             <item>
-             <layout class="QHBoxLayout" name="horizontalLayout_10" stretch="0,0">
+             <layout class="QHBoxLayout" name="horizontalLayout_10" stretch="1,0">
               <item>
                <widget class="QListWidget" name="geneList">
                 <property name="sizePolicy">
@@ -1642,7 +1642,7 @@
                 <property name="spacing">
                  <number>0</number>
                 </property>
-                <item>
+                <item alignment="Qt::AlignHCenter">
                  <widget class="QPushButton" name="addGeneSeqBtn">
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -1656,6 +1656,13 @@
                  </widget>
                 </item>
                 <item>
+                 <widget class="QPushButton" name="editGeneBtn">
+                  <property name="text">
+                   <string>View Gene</string>
+                  </property>
+                 </widget>
+                </item>
+                <item alignment="Qt::AlignHCenter">
                  <widget class="QPushButton" name="addGeneBtn">
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -1664,11 +1671,11 @@
                    </sizepolicy>
                   </property>
                   <property name="text">
-                   <string>Add Gene</string>
+                   <string>Include Gene</string>
                   </property>
                  </widget>
                 </item>
-                <item>
+                <item alignment="Qt::AlignHCenter">
                  <widget class="QPushButton" name="clearGeneBtn">
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -1778,7 +1785,7 @@
                   </property>
                  </widget>
                 </item>
-                <item>
+                <item alignment="Qt::AlignHCenter">
                  <widget class="QPushButton" name="clearHMMbtn">
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
