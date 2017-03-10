@@ -130,7 +130,6 @@ def MakeBlastDB(makeblastdbExec,dbPath,outputDir,outDBName):
     if platform.system() == 'Windows':
         dbPath = get_short_path_name(dbPath)
         outputDir = get_short_path_name(outputDir)
-    print(os.getcwd())
     command = [makeblastdbExec, '-in', dbPath, '-dbtype', "prot",'-out',os.path.join(outputDir,outDBName)]
     out, err, retcode = execute(command)
     if retcode != 0:
@@ -143,13 +142,35 @@ def runBLAST(blastExec,inputFastas,outputDir,dbPath,eValue='1E-05'):
         dbPath = os.path.join(get_short_path_name(path),outputDBname)
         inputFastas = get_short_path_name(inputFastas)
         outputDir = get_short_path_name(outputDir)
-        print(dbPath)
     command = [blastExec, "-db", dbPath, "-query", inputFastas, "-outfmt", "6", "-max_target_seqs", "10000", "-evalue",
                eValue, "-out", os.path.join(outputDir,"blast_results.out")]
     out, err, retcode = execute(command)
     if retcode != 0:
         print('BLAST failed with retcode %d: %r' % (retcode, err))
     return out,err,retcode
+
+def runHmmCheck(hmmSearchExec,hmmDBase):
+    if platform.system() == 'Windows':
+        hmmDBase = get_short_path_name(hmmDBase)
+    command = [hmmSearchExec,hmmDBase,'testHMM.fasta']
+    out,err,retcode = execute(command)
+    if retcode != 0:
+        return False
+    else:
+        return True
+
+def runHmmBuild(hmmBuildExec,inFile,outFile):
+    path,hmmName = os.path.split(outFile)
+    hmmName = hmmName.split('.hmm')[0]
+    if platform.system() == 'Windows':
+        inFile = get_short_path_name(inFile)
+        outFile = get_short_path_name(outFile)
+    command = [hmmBuildExec,'-n',hmmName,outFile,inFile]
+    out,err,retcode = execute(command)
+    if retcode != 0:
+        return False
+    else:
+        return True
 
 def runHmmsearch(hmmSearchExec,hmmDBase,outputDir,dbPath,eValue='1E-05'):
     if platform.system() == 'Windows':
@@ -194,9 +215,9 @@ def processSearchListOptionalHits(requiredBlastList,requiredHmmList,blastOutFile
                                   totalHitsRequired,additionalBlastList=[],additionalHmmList=[]):
     # Gather all of the proteins, might be a memory issue...code memory friendly version with sequential filters (?)
     prots = dict()
-    if requiredBlastList:
+    if requiredBlastList or additionalBlastList:
         prots = clusterAnalysis.parseBLAST(blastOutFile,prots,swapQuery=True)
-    if requiredHmmList:
+    if requiredHmmList or additionalHmmList:
         prots = clusterAnalysis.parse_hmmsearch_domtbl_anot(hmmOutFile,hmmDomLen,'hmm',prots,cutoff_score=hmmScore)
 
     requiredBlastHitDict = dict()
@@ -204,7 +225,6 @@ def processSearchListOptionalHits(requiredBlastList,requiredHmmList,blastOutFile
 
     additionalBlastHitDict = dict()
     additionalHmmHitDict = dict()
-
     if requiredBlastList:
         requiredBlastHitDict = {hitName:set(protein for protein in prots.values() if hitName in protein.hit_dict['blast'].hits)
                   for hitName in requiredBlastList}
@@ -217,83 +237,25 @@ def processSearchListOptionalHits(requiredBlastList,requiredHmmList,blastOutFile
     if additionalHmmList:
         additionalHmmHitDict = {hmms: set(protein for protein in prots.values() if len(set(hmms) & protein.getAnnotations('hmm')) == len(hmms))
                for hmms in additionalHmmList}
-
     requiredHitDict = {**requiredBlastHitDict,**requiredHmmHitDict}
     additionalHitDict = {**additionalBlastHitDict, **additionalHmmHitDict}
     hitDict = {**requiredHitDict, **additionalHitDict}
 
     putativeClusters = clusterAnalysis.cluster_proteins(prots.values(),windowSize)
     assert totalHitsRequired >= len(requiredHitDict)
-    numExtraHitsNeeded = totalHitsRequired - len(requiredHitDict)
+    numReqHits = len(requiredHitDict)
+    numExtraHitsNeeded = totalHitsRequired - numReqHits
 
     filteredClusters = dict()
     for species,clusters in putativeClusters.items():
         for cluster in clusters:
             clusterProts = set(protein for protein in cluster)
+            # first term checks required hits, second term checks extra hits 3rd term checks that there are enough genes for a unique values
             if (sum(1 for hitSet in requiredHitDict.values() if len(clusterProts & hitSet) >= 1) == len(requiredHitDict.keys())) \
-                    and (sum(1 for hitSet in additionalHitDict.values() if len(clusterProts & hitSet) >= 1) >= numExtraHitsNeeded):
+                    and (sum(1 for hitSet in additionalHitDict.values() if len(clusterProts & hitSet) >= 1) >= numExtraHitsNeeded)\
+                    and (len(clusterProts) >= numReqHits+ numExtraHitsNeeded):
                 filteredClusters[(species,cluster.location[0],cluster.location[1])] = \
                 {hitQuery:[protein.name for protein in (hitSet & clusterProts)] for hitQuery,hitSet in hitDict.items()}
-    return filteredClusters
-
-def processSearchList(blastList,hmmList,blastOutFile,hmmOutFile,hmmScore, hmmDomLen,windowSize):
-    # Gather all of the proteins, might be a memory issue...code memory friendly version with sequential filters (?)
-    prots = dict()
-    if blastList:
-        prots = clusterAnalysis.parseBLAST(blastOutFile,prots,swapQuery=True)
-    if hmmList:
-        prots = clusterAnalysis.parse_hmmsearch_domtbl_anot(hmmOutFile,hmmDomLen,'hmm',prots,cutoff_score=hmmScore)
-
-    blastDict = dict()
-    hmmDict = dict()
-
-    if blastList:
-        blastDict = {hitName:set(protein for protein in prots.values() if hitName in protein.hit_dict['blast'].hits)
-                  for hitName in blastList}
-    if hmmList:
-        hmmDict = {hmms: set(protein for protein in prots.values() if len(set(hmms) & protein.getAnnotations('hmm')) == len(hmms))
-               for hmms in hmmList}
-    hitDict = {**blastDict,**hmmDict}
-
-    putativeClusters = clusterAnalysis.cluster_proteins(prots.values(),windowSize)
-
-    filteredClusters = dict()
-    for species,clusters in putativeClusters.items():
-        for cluster in clusters:
-            clusterProts = set(protein for protein in cluster)
-            if sum(1 for hitSet in hitDict.values() if len(clusterProts & hitSet) >= 1) == len(hitDict.keys()):
-                filteredClusters[(species,cluster.location[0],cluster.location[1])] = \
-                {hitQuery:[protein.name for protein in (hitSet & clusterProts)] for hitQuery,hitSet in hitDict.items()}
-    return filteredClusters
-
-def processSearchListProt(blastList,hmmList,blastOutFile,hmmOutFile,windowSize = 50000):
-    # Gather all of the proteins, might be a memory issue...code memory friendly version with sequential filters (?)
-    prots = dict()
-    if blastList:
-        prots = clusterAnalysis.parseBLAST(blastOutFile,prots,swapQuery=True)
-    if hmmList:
-        prots = clusterAnalysis.parse_hmmsearch_domtbl_anot(hmmOutFile,15,'hmm',prots)
-
-    blastDict = dict()
-    hmmDict = dict()
-
-    if blastList:
-        blastDict = {hitName:set(protein for protein in prots.values() if hitName in protein.hit_dict['blast'].hits)
-                  for hitName in blastList}
-    if hmmList:
-        hmmDict = {hmms: set(protein for protein in prots.values() if len(set(hmms) & protein.getAnnotations('hmm')) == len(hmms))
-               for hmms in hmmList}
-    hitDict = {**blastDict,**hmmDict}
-
-    putativeClusters = clusterAnalysis.cluster_proteins(prots.values(),windowSize)
-
-    filteredClusters = dict()
-    for species,clusters in putativeClusters.items():
-        for cluster in clusters:
-            clusterProts = set(protein for protein in cluster)
-            if sum(1 for hitSet in hitDict.values() if len(clusterProts & hitSet) >= 1) == len(hitDict.keys()):
-                filteredClusters[(species,cluster.location[0],cluster.location[1])] = \
-                {hitQuery:[(protein.name,protein.idx,protein) for protein in (hitSet & clusterProts)] for hitQuery,hitSet in hitDict.items()}
     return filteredClusters
 
 def processGbkDivFile(gbkDivFile,database,guiSignal=None):
@@ -587,11 +549,7 @@ def humanbytes(B):
       return '{0:.2f} TB'.format(B/TB)
 
 if __name__ == "__main__":
-    from glob import glob
-    os.chdir('/Volumes/Internal HD/Users/emzodls/genbankDivDL')
-    taskList = glob('/Volumes/Internal HD/Users/emzodls/genbankDivDL/gbbct309GBKs/*gbk')
-    proccessGbks(taskList, 'gbbct309.fasta', guiSignal=None)
-    # outputFolder = '/Volumes/Internal HD/Users/emzodls/genbankDivDL/gbbct309GBKs'
-    # for accession, record in extract_records(open('gbbct309.gb')):
-    #     with open(os.path.join(outputFolder, '{}.gbk'.format(accession)), 'w') as output:
-    #         output.write(record)
+    outFile ='/Volumes/Data/testClusterTools/testBuildHmm/test.hmm'
+    inFileTrue = '/Users/emzodls/Dropbox/Lab/Warwick/clusters/tetronate/hmms/acp.aln'
+    inFileFalse = '/Users/emzodls/Dropbox/Lab/Warwick/clusters/tetronate/acp.txt'
+    print(runHmmBuild('hmmbuild',inFileTrue,outFile))

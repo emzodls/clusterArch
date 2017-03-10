@@ -28,14 +28,15 @@ from PyQt5 import QtGui
 from PyQt5.QtWidgets import (QApplication, QFileDialog, QMainWindow,
         QMessageBox,QCheckBox,QTableWidgetItem,QWidget,QListWidgetItem)
 from utils import parseSeqFile,parseHMMfile,generateInputFasta,generateHMMdb,MakeBlastDB,runBLAST,\
-    runHmmsearch,processSearchList,proccessGbks,processSearchListOptionalHits,humanbytes,processGbkDivFile,\
-    ncbiGenomeFastaParser,fastaDictToSeqRecs,writeSeqRecs
+    runHmmsearch,proccessGbks,processSearchListOptionalHits,humanbytes,processGbkDivFile,\
+    ncbiGenomeFastaParser,fastaDictToSeqRecs,writeSeqRecs,runHmmCheck,runHmmBuild
 from collections import Counter
 from glob import iglob,glob
 from itertools import chain
 from ncbiUtils import ncbiQuery,ncbiSummary,ncbiFetch,getGbkDlList,parseAssemblyReportFile,fetchGbksWithAcc
 
-import mainGuiNCBI,resultsWindow,status,parameters,sys,createDbStatus,addGene,downloadNcbiFilesWin,gbDivSumWin, ncbiGenomeSumWin,wget
+import mainGuiNCBI,resultsWindow,status,parameters,sys,createDbStatus,addGene,downloadNcbiFilesWin,gbDivSumWin, \
+    ncbiGenomeSumWin,buildHmmWin, wget
 #### NCBI Query Functions
 class ncbiQueryWorker(QObject):
     start = pyqtSignal()
@@ -407,27 +408,6 @@ class runHmmerWorker(QObject):
                 self.hmmSearchComplete.emit(True)
                 return
 
-class runProcessSearchList(QObject):
-    start = pyqtSignal()
-    result = pyqtSignal(dict)
-    def __init__(self,blastList,hmmList,blastOutFile,hmmOutFile,hmmScore,hmmDomLen,windowSize):
-        self.blastList = blastList
-        self.hmmList = hmmList
-        self.blastOutFile = blastOutFile
-        self.hmmOutFile = hmmOutFile
-
-        self.hmmScore = hmmScore
-        self.hmmDomLen = hmmDomLen
-        self.windowSize = windowSize
-
-        super(runProcessSearchList, self).__init__()
-    @pyqtSlot()
-    @pyqtSlot(dict)
-    def run(self):
-        filteredClusters = processSearchList(self.blastList, self.hmmList, self.blastOutFile, self.hmmOutFile,
-                                             self.hmmScore,self.hmmDomLen,self.windowSize)
-        self.result.emit(filteredClusters)
-
 class runProcessSearchListOptionalHits(QObject):
     start = pyqtSignal()
     result = pyqtSignal(dict)
@@ -488,6 +468,10 @@ class ncbiGenomeSummaryWin(QWidget,ncbiGenomeSumWin.Ui_ncbiGenomeSummaryWin):
         super(self.__class__,self).__init__()
         self.setupUi(self)
 
+class buildHmmWin(QWidget,buildHmmWin.Ui_buildHmmWin):
+    def __init__(self):
+        super(self.__class__,self).__init__()
+        self.setupUi(self)
 
 class gbDivSummaryWindow(QWidget,gbDivSumWin.Ui_DatabaseSummaryWin):
     def __init__(self):
@@ -536,7 +520,7 @@ class resultsWindow(QWidget,resultsWindow.Ui_Results):
         self.gbDlWindowSize.setValidator(posIntValidator)
 
 class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
-    def __init__(self,makeblastdbExec,blastExec,hmmFetchExec,hmmSearchExec,verbose=False):
+    def __init__(self,makeblastdbExec,blastExec,hmmFetchExec,hmmSearchExec,hmmBuildExec,verbose=False):
 
         super(self.__class__, self).__init__()
         self.setupUi(self)
@@ -624,6 +608,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.blastExec = blastExec
         self.hmmFetchExec = hmmFetchExec
         self.hmmSearchExec = hmmSearchExec
+        self.hmmBuildExec = hmmBuildExec
         self.verbose = verbose
 
         self.currentGeneSelected = ''
@@ -640,6 +625,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.deleteGenbankBtn.clicked.connect(self.removeGbkFiles)
         self.chooseDBoutputDirBtn.clicked.connect(self.chooseDBoutDir)
         self.createDbBtn.clicked.connect(self.createDB)
+        self.buildHMMBtn.clicked.connect(self.openBuildHmmWin)
 
         self.addGenefilePathBtn.clicked.connect(self.openGene)
         self.addHMMfilePathBtn.clicked.connect(self.openHmm)
@@ -1311,19 +1297,19 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
 
 ############################################
     def showEditGeneWin(self):
-        self.editGeneWin = addGeneWindow()
-        self.editGeneWin.setWindowModality(Qt.WindowModal)
-        geneToEdit = self.geneList.currentItem().text()
-        seqToEdit = self.geneDict[geneToEdit]
-        self.editGeneWin.geneSequence.setText(seqToEdit)
-        self.editGeneWin.geneName.setText(geneToEdit)
-        self.editGeneWin.geneName.setEnabled(False)
-        self.editGeneWin.addGeneBtn.clicked.connect(lambda: self.editGeneSeq(geneToEdit,seqToEdit))
-        self.editGeneWin.closeBtn.setVisible(False)
-        self.editGeneWin.addGeneBtn.setText("Okay")
-        self.editGeneWin.setWindowTitle('Edit Gene')
-        self.editGeneWin.show()
-        ## Check that gene name doesn't conflict with
+        if self.geneList.currentItem():
+            self.editGeneWin = addGeneWindow()
+            self.editGeneWin.setWindowModality(Qt.WindowModal)
+            geneToEdit = self.geneList.currentItem().text()
+            seqToEdit = self.geneDict[geneToEdit]
+            self.editGeneWin.geneSequence.setText(seqToEdit)
+            self.editGeneWin.geneName.setText(geneToEdit)
+            self.editGeneWin.geneName.setEnabled(False)
+            self.editGeneWin.addGeneBtn.clicked.connect(lambda: self.editGeneSeq(geneToEdit,seqToEdit))
+            self.editGeneWin.closeBtn.setVisible(False)
+            self.editGeneWin.addGeneBtn.setText("Okay")
+            self.editGeneWin.setWindowTitle('Edit Gene')
+            self.editGeneWin.show()
 
     def editGeneSeq(self,geneToEdit,seqToEdit):
         newGeneSeq = self.editGeneWin.geneSequence.toPlainText()
@@ -1460,6 +1446,70 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 msg.setStandardButtons(QMessageBox.Ok)
                 msg.exec()
                 self.geneList.currentItem().setText(self.currentGeneSelected)
+############ HMM Maker ########################
+    def openBuildHmmWin(self):
+        self.buildHmmWin = buildHmmWin()
+        self.buildHmmWin.setWindowModality(Qt.WindowModal)
+
+        self.buildHmmWin.selectInFileBtn.clicked.connect(self.setBuildHmmInFile)
+        self.buildHmmWin.selectOutfileBtn.clicked.connect(self.setBuildHmmOutFile)
+        self.buildHmmWin.buildHmmBtn.clicked.connect(self.buildHmm)
+        self.buildHmmWin.show()
+
+    def setBuildHmmInFile(self):
+        if sys.platform == 'win32':
+            fileName, _ = QFileDialog.getOpenFileName(self,filter='MSA Files(*.sto)')
+        else:
+            fileName, _ = QFileDialog.getOpenFileName(self, filter='MSA Files (*.sto *.fa *.fasta)')
+        if self.verbose:
+            print(fileName)
+        if fileName:
+            self.buildHmmWin.inFilePath.setText(fileName)
+
+    def setBuildHmmOutFile(self):
+        usrInput, _ = QFileDialog.getSaveFileName(self, filter='HMM File(*.hmm)')
+        if usrInput:
+            dirName,fileName = os.path.split(usrInput)
+            if not fileName.endswith('.hmm'):
+                fileName += '.hmm'
+            if dirName and os.access(dirName, os.W_OK):
+                self.buildHmmWin.outFilePath.setText(os.path.join(dirName,fileName))
+            else:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setText("Can't Write to that Folder")
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec()
+        if self.verbose:
+            print(usrInput)
+
+    def buildHmm(self):
+        if self.verbose:
+            print('Building HMM')
+        if runHmmBuild(self.hmmBuildExec,self.buildHmmWin.inFilePath.text(),self.buildHmmWin.outFilePath.text()):
+            hmmDB = self.buildHmmWin.outFilePath.text()
+            if runHmmCheck(self.hmmSearchExec,hmmDB):
+                hmmsToAdd,self.hmmDict = parseHMMfile(hmmDB,self.hmmDict)
+                for hmm in hmmsToAdd:
+                    self.hmmList.addItem(hmm)
+                self.buildHmmWin.close()
+            else:
+                self.buildHmmWin.close()
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setText('HMM Building Failed')
+                msg.setStandardButtons(QMessageBox.Ok)
+                os.remove(self.buildHmmWin.outFilePath.text())
+                msg.exec()
+        else:
+            self.buildHmmWin.close()
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('HMM Building Failed')
+            msg.setStandardButtons(QMessageBox.Ok)
+            os.remove(self.buildHmmWin.outFilePath.text())
+            msg.exec()
+
     ### Utility Functions
     def updateParams(self):
         parameterObjs = [self.paramsWin.blastEval,self.paramsWin.hmmEval,self.paramsWin.hmmDomLen,
@@ -1612,7 +1662,8 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         statusWin.percentCmpBar.setValue(percentCmpBarValue)
     def abortSearch(self,statusWin,currentThread,currentWorker):
         del currentWorker
-        currentThread.terminate()
+        if currentThread:
+            currentThread.terminate()
         statusWin.close()
         self.setEnabled(True)
 
@@ -2139,6 +2190,10 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             self.updateStatusWinText(statusWin, 'Search Complete: No Results Found',
                                      '6/6', 6)
             self.checkSuccessful = False
+            statusWin.viewResultsBtn.setText('Close')
+            statusWin.viewResultsBtn.setEnabled(True)
+            statusWin.cancelBtn.setEnabled(False)
+            statusWin.viewResultsBtn.clicked.connect(statusWin.close)
             if self.runnerThread:
                 self.runnerThread.terminate()
             return
@@ -2223,15 +2278,25 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 msg.buttonClicked.connect(self.clearGeneFilePath)
                 msg.exec()
     def openHmm(self):
-        fileName, _ = QFileDialog.getOpenFileName(self)
+        fileName, _ = QFileDialog.getOpenFileName(self,filter="HMM Files (*.hmm)")
         if self.verbose: print(fileName)
         if fileName:
             self.hmmFilePath.setText(fileName)
     def loadHMMFile(self):
+        ## check if HMM file is valid
         if self.hmmFilePath.text():
-            hmmsToAdd,self.hmmDict = parseHMMfile(self.hmmFilePath.text(),self.hmmDict)
-            for hmm in hmmsToAdd:
-                self.hmmList.addItem(hmm)
+            hmmDB = self.hmmFilePath.text()
+            if runHmmCheck(self.hmmSearchExec,hmmDB):
+                hmmsToAdd,self.hmmDict = parseHMMfile(hmmDB,self.hmmDict)
+                for hmm in hmmsToAdd:
+                    self.hmmList.addItem(hmm)
+            else:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                filePath,fileName = os.path.split(hmmDB)
+                msg.setText('Cannot read file: {}.\nCheck that it is a valid HMM file for this OS.'.format(fileName))
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec()
             self.clearHmmFilePath()
     def loadGene(self):
         genesToAdd = self.geneList.selectedItems()
@@ -2293,9 +2358,10 @@ def main():
     makeblastdbExec = 'makeblastdb'
     blastExec = 'blastp'
     hmmSearchExec = 'hmmsearch'
+    hmmBuildExec = 'hmmbuild'
 
     app = QApplication(sys.argv)
-    form = mainApp(makeblastdbExec,blastExec,hmmFetchExec,hmmSearchExec,verbose=True)
+    form = mainApp(makeblastdbExec,blastExec,hmmFetchExec,hmmSearchExec,hmmBuildExec,verbose=True)
     form.show()
     app.exec_()
 

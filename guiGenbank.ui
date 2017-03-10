@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>865</width>
-    <height>715</height>
+    <width>774</width>
+    <height>574</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -1363,8 +1363,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>811</width>
-             <height>486</height>
+             <width>720</width>
+             <height>367</height>
             </rect>
            </property>
            <attribute name="label">
@@ -1773,6 +1773,13 @@
                  <number>0</number>
                 </property>
                 <item>
+                 <widget class="QPushButton" name="buildHMMBtn">
+                  <property name="text">
+                   <string>Build HMM</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
                  <widget class="QPushButton" name="addHMMbtn">
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -2060,31 +2067,6 @@
      </widget>
     </item>
    </layout>
-  </widget>
-  <widget class="QMenuBar" name="menubar">
-   <property name="geometry">
-    <rect>
-     <x>0</x>
-     <y>0</y>
-     <width>865</width>
-     <height>22</height>
-    </rect>
-   </property>
-   <widget class="QMenu" name="menuFile">
-    <property name="title">
-     <string>File</string>
-    </property>
-    <addaction name="actionSet_Database"/>
-    <addaction name="actionOpen_Gene_File"/>
-    <addaction name="actionOpen_HMM_File"/>
-   </widget>
-   <widget class="QMenu" name="menuClose">
-    <property name="title">
-     <string>Close</string>
-    </property>
-   </widget>
-   <addaction name="menuFile"/>
-   <addaction name="menuClose"/>
   </widget>
   <action name="actionSet_Database">
    <property name="text">
