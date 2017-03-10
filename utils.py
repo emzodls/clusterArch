@@ -53,7 +53,7 @@ if platform.system() == 'Windows':
                 output_buf_size = needed
 ###########################################
 
-def execute(commands, input=None):
+def execute(commands, input=None,shell=False):
     "Execute commands in a system-independent manner"
 
     if input is not None:
@@ -64,7 +64,7 @@ def execute(commands, input=None):
     try:
         proc = subprocess.Popen(commands, stdin=stdin_redir,
                                 stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE)
+                                stderr=subprocess.PIPE,shell=False)
         out, err = proc.communicate(input=input)
         retcode = proc.returncode
         return out, err, retcode
@@ -166,9 +166,15 @@ def runHmmBuild(hmmBuildExec,inFile,outFile):
         inFile = get_short_path_name(inFile)
         outFile = get_short_path_name(outFile)
     command = [hmmBuildExec,'-n',hmmName,outFile,inFile]
-    out,err,retcode = execute(command)
+    if platform.system() == 'Windows':
+        print(platform.system())
+        out,err,retcode = execute(command,shell=True)
+    else:
+        out, err, retcode = execute(command)
     if retcode != 0:
+        print(err,retcode)
         return False
+
     else:
         return True
 
@@ -549,7 +555,7 @@ def humanbytes(B):
       return '{0:.2f} TB'.format(B/TB)
 
 if __name__ == "__main__":
-    outFile ='/Volumes/Data/testClusterTools/testBuildHmm/test.hmm'
-    inFileTrue = '/Users/emzodls/Dropbox/Lab/Warwick/clusters/tetronate/hmms/acp.aln'
+    outFile = r'C:\Users\Emzo de los Santos\Desktop\clusterToolsTests\test.hmm'
+    inFileTrue = r'C:\Users\Emzo de los Santos\Desktop\diels_ald_all.sto'
     inFileFalse = '/Users/emzodls/Dropbox/Lab/Warwick/clusters/tetronate/acp.txt'
     print(runHmmBuild('hmmbuild',inFileTrue,outFile))

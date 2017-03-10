@@ -1499,7 +1499,8 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 msg.setIcon(QMessageBox.Critical)
                 msg.setText('HMM Building Failed')
                 msg.setStandardButtons(QMessageBox.Ok)
-                os.remove(self.buildHmmWin.outFilePath.text())
+                if os.path.isfile(self.buildHmmWin.outFilePath.text()):
+                    os.remove(self.buildHmmWin.outFilePath.text())
                 msg.exec()
         else:
             self.buildHmmWin.close()
@@ -1507,7 +1508,8 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             msg.setIcon(QMessageBox.Critical)
             msg.setText('HMM Building Failed')
             msg.setStandardButtons(QMessageBox.Ok)
-            os.remove(self.buildHmmWin.outFilePath.text())
+            if os.path.isfile(self.buildHmmWin.outFilePath.text()):
+                os.remove(self.buildHmmWin.outFilePath.text())
             msg.exec()
 
     ### Utility Functions
