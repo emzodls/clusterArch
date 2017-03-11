@@ -250,7 +250,6 @@ class createDbWorker(QObject):
 class runChecksWorker(QObject):
     checkError = pyqtSignal(str)
     start = pyqtSignal(str)
-    finished = pyqtSignal(bool)
     def __init__(self,outputDir,pathToDatabase):
         self.outputDir = outputDir
         self.pathToDatabase = pathToDatabase
@@ -261,19 +260,15 @@ class runChecksWorker(QObject):
         # First check that you can read and write to the required directories
         if not self.outputDir:
             self.checkError.emit('noOutputDir')
-            self.finished.emit(False)
         else:
             if not os.access(self.outputDir, os.W_OK):
                 self.checkError.emit('noWriteOutputDir')
-                self.finished.emit(False)
             else:
                 if not self.pathToDatabase:
                     self.checkError.emit('noDBpath')
-                    self.finished.emit(False)
                 else:
                     if not os.access(self.pathToDatabase, os.R_OK):
                         self.checkError.emit('noReadDB')
-                        self.finished.emit(False)
                     else:
                     # Now check if the specified database is in the required format
                         with open(self.pathToDatabase) as dbHandle:
@@ -296,14 +291,11 @@ class runChecksWorker(QObject):
                                     pass
                         if not hasValidEntriesFlag:
                             self.checkError.emit('invalidDB')
-                            self.finished.emit(False)
                         else:
                             if someInvalidEntriesFlag:
                                 self.checkError.emit('entriesWarn')
-                                self.finished.emit(True)
                             else:
                                 self.checkError.emit('good')
-                                self.finished.emit(True)
 
 class runBlastWorker(QObject):
     inputGenerated = pyqtSignal(bool)
@@ -312,9 +304,10 @@ class runBlastWorker(QObject):
     doneBLAST = pyqtSignal(bool)
     start = pyqtSignal()
 
-    def __init__(self,forBLAST,outputDir,pathToDatabase,makeblastdbExec,blastpExec,blastEval):
+    def __init__(self,forBLAST,outputDir,searchName,pathToDatabase,makeblastdbExec,blastpExec,blastEval):
         self.forBLAST = forBLAST
         self.outputDir = outputDir
+        self.searchName = searchName
         self.pathToDatabase = pathToDatabase
         self.makeblastdbExec = makeblastdbExec
         self.blastpExec = blastpExec
@@ -326,7 +319,7 @@ class runBlastWorker(QObject):
     @pyqtSlot(bool)
     def run(self):
         ### Generate Input Fasta
-        generateInputFasta(self.forBLAST,self.outputDir)
+        generateInputFasta(self.forBLAST,self.outputDir,self.searchName)
         self.inputGenerated.emit(True)
         filePath, fileName = os.path.split(self.pathToDatabase)
         phrCheck = glob(self.pathToDatabase + '*.phr')
@@ -361,11 +354,11 @@ class runBlastWorker(QObject):
         inputFastas = os.path.join(self.outputDir, 'gene_queries.fa')
 
         if dbInOutputFolder:
-            out, err, retcode = runBLAST(self.blastpExec, inputFastas, self.outputDir,
+            out, err, retcode = runBLAST(self.blastpExec, inputFastas, self.outputDir,self.searchName,
                                          os.path.join(self.outputDir, outputDBname),
                                          eValue=str(self.blastEval))
         else:
-            out, err, retcode = runBLAST(self.blastpExec, inputFastas, self.outputDir,
+            out, err, retcode = runBLAST(self.blastpExec, inputFastas, self.outputDir,self.searchName,
                                          self.pathToDatabase, eValue=str(self.blastEval))
         if retcode != 0:
             self.doneBLAST.emit(False)
@@ -379,12 +372,13 @@ class runHmmerWorker(QObject):
     hmmDBbuilt = pyqtSignal(bool,list)
     hmmSearchComplete = pyqtSignal(bool)
 
-    def __init__(self,hmmFetchExec,hmmSearchExec,hmmDict,hmmSet,outputDir,pathToDatabase,hmmEval):
+    def __init__(self,hmmFetchExec,hmmSearchExec,hmmDict,hmmSet,outputDir,searchName,pathToDatabase,hmmEval):
         self.hmmFetchExec = hmmFetchExec
         self.hmmSearchExec = hmmSearchExec
         self.hmmDict = hmmDict
         self.hmmSet = hmmSet
         self.outputDir = outputDir
+        self.searchName = searchName
         self.pathToDatabase = pathToDatabase
         self.hmmEval = hmmEval
         super(runHmmerWorker, self).__init__()
@@ -392,15 +386,16 @@ class runHmmerWorker(QObject):
     @pyqtSlot(bool)
     @pyqtSlot(bool,list)
     def run(self):
-        errFlag, failedToFetch = generateHMMdb(self.hmmFetchExec, self.hmmDict, self.hmmSet, self.outputDir)
+        errFlag, failedToFetch = generateHMMdb(self.hmmFetchExec, self.hmmDict, self.hmmSet, self.outputDir,self.searchName)
         if errFlag:
             self.hmmDBbuilt.emit(False,failedToFetch)
             return
         else:
             self.hmmDBbuilt.emit(True,[])
-            hmmDBase = os.path.join(self.outputDir, 'hmmDB.hmm')
-            out, err, retcode = runHmmsearch(self.hmmSearchExec, hmmDBase, self.outputDir,
-                                             self.pathToDatabase, eValue=str(self.hmmEval))
+            hmmDBase = os.path.join(self.outputDir, '{}_hmmDB.hmm'.format(self.searchName))
+            if __name__ == '__main__':
+                out, err, retcode = runHmmsearch(self.hmmSearchExec, hmmDBase, self.outputDir,self.searchName,
+            self.pathToDatabase, eValue=str(self.hmmEval))
             if retcode != 0:
                 self.hmmSearchComplete.emit(False)
                 return
@@ -411,7 +406,7 @@ class runHmmerWorker(QObject):
 class runProcessSearchListOptionalHits(QObject):
     start = pyqtSignal()
     result = pyqtSignal(dict)
-    def __init__(self,requiredBlastList,requiredHmmList,blastOutFile,hmmOutFile,hmmScore,hmmDomLen,windowSize,
+    def __init__(self,requiredBlastList,requiredHmmList,blastOutFile,blastEval,hmmOutFile,hmmScore,hmmDomLen,windowSize,
                  totalHitsRequired, additionalBlastList=[], additionalHmmList=[]):
         self.requiredBlastList = requiredBlastList
         self.requiredHmmList = requiredHmmList
@@ -420,6 +415,7 @@ class runProcessSearchListOptionalHits(QObject):
         self.additionalHmmList = additionalHmmList
 
         self.blastOutFile = blastOutFile
+        self.blastEval = blastEval
         self.hmmOutFile = hmmOutFile
 
         self.hmmScore = hmmScore
@@ -434,7 +430,7 @@ class runProcessSearchListOptionalHits(QObject):
     @pyqtSlot(dict)
     def run(self):
         filteredClusters = processSearchListOptionalHits(self.requiredBlastList, self.requiredHmmList,
-                                                         self.blastOutFile, self.hmmOutFile,
+                                                         self.blastOutFile, self.blastEval,self.hmmOutFile,
                                                          self.hmmScore,self.hmmDomLen,self.windowSize,
                                                          self.totalHitsRequired,self.additionalBlastList,self.additionalHmmList)
         self.result.emit(filteredClusters)
@@ -534,6 +530,9 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
 
         maxEntriesValidator = QtGui.QIntValidator(1,1000)
 
+        regex = QtGui.QRegularExpressionValidator(QRegularExpression('^(?!\d)[a-zA-Z0-9_]*$'))
+        self.searchNameInput.setValidator(regex)
+
         self.minLength.setValidator(posIntValidator)
         self.maxLength.setValidator(posIntValidator)
         self.numEntries.setValidator(maxEntriesValidator)
@@ -602,6 +601,8 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.forHmmer = dict()
         self.pathToDatabase = ''
         self.outputDir  = ''
+        self.searchName = 'clusterTools'
+        self.lastSearch = dict()
         self.runnerThread = None
 
         self.makeblastdbExec = makeblastdbExec
@@ -615,7 +616,8 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
 
         ### Set Up Workflow Variables
 
-        self.checkSuccessful = False
+        # self.checkSuccessful = False
+        self.dbsChecked = dict()
         self.blastSuccessful = False
         self.hmmerSuccessful = False
 
@@ -1128,7 +1130,6 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             item.setSelected(True)
 
     def addAllNcbiGenomes(self):
-        entriesToDL = set()
         for idx in range(self.ncbiGenomesSearchResults.count()):
             genome = self.ncbiGenomesSearchResults.item(idx)
             try:
@@ -1513,6 +1514,17 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             msg.exec()
 
     ### Utility Functions
+    def updateLastSearch(self):
+        self.lastSearch['db'] = self.pathToDatabase
+        self.lastSearch['id'] = self.searchName
+        self.lastSearch['blastEval'] = self.nameToParamDict['blastEval']
+        self.lastSearch['hmmEval'] = self.nameToParamDict['hmmEval']
+        self.lastSearch.setdefault('forBLAST',dict())
+        self.lastSearch['forBLAST'] = {**self.lastSearch['forBLAST'],**self.forBLAST}
+        self.lastSearch['forHmmer'] = self.forHmmer
+        self.lastSearch.setdefault('hmmSet',set())
+        self.lastSearch['hmmSet'].update(*self.forHmmer.keys())
+
     def updateParams(self):
         parameterObjs = [self.paramsWin.blastEval,self.paramsWin.hmmEval,self.paramsWin.hmmDomLen,
                          self.paramsWin.hmmScore,self.paramsWin.windowSize]
@@ -1546,9 +1558,6 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
 
     def activateApply(self):
         self.paramsWin.applyBtn.setEnabled(True)
-
-    def updateCheckSuccessful(self,flag):
-        self.checkSuccessful = flag
 
     ### Genbank Panel Functions
     def loadGbkDir(self):
@@ -1672,7 +1681,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
     ### Results Window Methods
     def showResultsWindow(self,blastList,hmmList,filteredClusters):
         self.statusWin.close()
-        self.checkSuccessful = False
+        #self.checkSuccessful = False
         self.resultsWin = resultsWindow()
 
         self.resultsWin.resultsList.setColumnCount(5 + len(blastList) + len(hmmList))
@@ -1819,28 +1828,36 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
     ### Run Permissions Checks
     def runChecks(self):
         if self.searchList.rowCount() >= 1:
+            searchName = self.searchNameInput.text().strip()
+            if searchName:
+                self.searchName = searchName
             self.setEnabled(False)
-            if not self.checkSuccessful:
+            checkSuccessful = self.dbsChecked.setdefault(self.pathToDatabase,False)
+            self.blastSuccessful = False
+            self.hmmerSuccessful = False
+            self.statusWin = statusWindow()
+            self.updateStatusWinText(self.statusWin, 'Running Database and Output Checks', '1/6', 1)
+
+            self.statusWin.percentCmpBar.setMaximum(6)
+            self.statusWin.cancelBtn.clicked.connect(
+                lambda: self.abortSearch(self.statusWin, self.runnerThread, None))
+            self.statusWin.show()
+
+            if not checkSuccessful:
                 if not self.runnerThread:
                     self.runnerThread = QThread()
                 self.runnerThread.start()
-
-                self.checkSuccessful = False
-                self.blastSuccessful = False
-                self.hmmerSuccessful = False
-
                 self.checksWorker = runChecksWorker(self.outputDir,self.pathToDatabase)
-                self.checksWorker.checkError.connect(lambda x: self.doneCheck(x,self.statusWin))
-                self.statusWin = statusWindow()
-                self.statusWin.percentCmpBar.setMaximum(6)
-                self.updateStatusWinText(self.statusWin, 'Running Database and Output Checks', '1/6', 1)
-                self.statusWin.cancelBtn.clicked.connect(lambda: self.abortSearch(self.statusWin,self.runnerThread,self.checksWorker))
-                self.statusWin.show()
+                self.checksWorker.checkError.connect(lambda x: self.doneCheck(x, self.statusWin))
+                self.statusWin.cancelBtn.clicked.connect(
+                    lambda: self.abortSearch(self.statusWin, self.runnerThread, self.checksWorker))
                 self.checksWorker.moveToThread(self.runnerThread)
                 self.checksWorker.start.connect(self.checksWorker.run)
                 self.checksWorker.start.emit('whee')
-                self.checksWorker.finished.connect(self.updateCheckSuccessful)
             else:
+                self.updateStatusWinText(self.statusWin, 'Database Already Checked'
+                                                         '\nRunning BLAST Search: Generating Input Fasta', '2/6',
+                                         self.statusWin.percentCmpBar.value() + 1)
                 self.runBlast()
         else:
             msg = QMessageBox()
@@ -1906,33 +1923,52 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             msg.setText('Warning: Some Entries in Database are Incorrectly Formatted, these will be ignored.')
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
-            self.checkSuccessful = True
+            self.dbsChecked[self.pathToDatabase] = True
             self.runBlast()
             return
         elif checkErr == 'good':
-            self.checkSuccessful = True
+            self.dbsChecked[self.pathToDatabase] = True
             self.runBlast()
             return
     ### Run BLAST Methods
     def runBlast(self):
         self.updateStatusWinText(self.statusWin, 'Running BLAST Search: Generating Input Fasta', '2/6',
                                  self.statusWin.percentCmpBar.value() + 1)
-        if self.checkSuccessful:
+        checkSucessful = self.dbsChecked.get(self.pathToDatabase,False)
+        if self.verbose:
+            print(checkSucessful,self.pathToDatabase,self.dbsChecked)
+        if checkSucessful:
             if not self.blastSuccessful:
                 if self.forBLAST:
-                    self.blastWorker = runBlastWorker(self.forBLAST, self.outputDir, self.pathToDatabase,
-                                                      self.makeblastdbExec, self.blastExec,self.nameToParamDict['blastEval'])
+                    if self.verbose and self.lastSearch:
+                        print('BLAST Check')
+                        print('Db Check',self.lastSearch['db'],self.pathToDatabase)
+                        print('Dict Check',list(self.lastSearch['forBLAST'].items()),list(self.forBLAST.items()))
+                        print('Eval Check',self.lastSearch['blastEval'],self.nameToParamDict['blastEval'])
+                    if self.lastSearch and self.lastSearch['id'] == self.searchName and self.lastSearch['db'] == self.pathToDatabase \
+                             and self.forBLAST.items() <= self.lastSearch['forBLAST'].items() \
+                            and self.nameToParamDict['blastEval'] <=  self.lastSearch['blastEval'] :
+                        msg = QMessageBox()
+                        msg.setIcon(QMessageBox.Information)
+                        msg.setText("Current Search is a Subset of Previous Search, skipping BLAST.")
+                        msg.setStandardButtons(QMessageBox.Ok)
+                        msg.exec()
+                        self.blastSuccessful = True
+                        self.runHmmer()
+                    else:
+                        self.blastWorker = runBlastWorker(self.forBLAST, self.outputDir, self.searchName,self.pathToDatabase,
+                                                          self.makeblastdbExec, self.blastExec,self.nameToParamDict['blastEval'])
 
-                    self.blastWorker.inputGenerated.connect(lambda x: self.generateFasta(x, self.statusWin))
-                    self.blastWorker.makeDB.connect(lambda x: self.checkDB(x, self.statusWin))
-                    self.blastWorker.dbCreated.connect(lambda x: self.makeBlastDB(x, self.statusWin))
-                    self.blastWorker.doneBLAST.connect(lambda x: self.doneBLAST(x, self.statusWin))
-                    if not self.runnerThread:
-                        self.runnerThread = QThread()
-                    self.runnerThread.start()
-                    self.blastWorker.moveToThread(self.runnerThread)
-                    self.blastWorker.start.connect(self.blastWorker.run)
-                    self.blastWorker.start.emit()
+                        self.blastWorker.inputGenerated.connect(lambda x: self.generateFasta(x, self.statusWin))
+                        self.blastWorker.makeDB.connect(lambda x: self.checkDB(x, self.statusWin))
+                        self.blastWorker.dbCreated.connect(lambda x: self.makeBlastDB(x, self.statusWin))
+                        self.blastWorker.doneBLAST.connect(lambda x: self.doneBLAST(x, self.statusWin))
+                        if not self.runnerThread:
+                            self.runnerThread = QThread()
+                        self.runnerThread.start()
+                        self.blastWorker.moveToThread(self.runnerThread)
+                        self.blastWorker.start.connect(self.blastWorker.run)
+                        self.blastWorker.start.emit()
                 else:
                     msg = QMessageBox()
                     msg.setIcon(QMessageBox.Information)
@@ -1943,6 +1979,13 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                     self.runHmmer()
             else:
                 self.runHmmer()
+        else:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Database Not Yet Checked...\nThis shouldn't happen. Email help.")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+
     @pyqtSlot(bool)
     def generateFasta(self,flag,statusWin):
         if flag:
@@ -2012,24 +2055,41 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             return
     ### Run Hmmer Methods
     def runHmmer(self):
-        if self.checkSuccessful:
+        checkSucessful = self.dbsChecked.get(self.pathToDatabase, False)
+        if checkSucessful:
             self.updateStatusWinText(self.statusWin, 'Running HMMSearch: Extracting HMMs to make reference file',
                                      '3/6', self.statusWin.percentCmpBar.value() + 1)
             if not self.hmmerSuccessful:
                 hmmSet = set()
                 hmmSet.update(*self.forHmmer.keys())
                 if hmmSet:
-                    self.hmmerWorker = runHmmerWorker(self.hmmFetchExec, self.hmmSearchExec,
-                                                      self.hmmDict, hmmSet, self.outputDir,self.pathToDatabase,
-                                                      self.nameToParamDict['hmmEval'])
-                    self.hmmerWorker.hmmDBbuilt.connect(lambda x, y: self.hmmDBbuiltCheck(x, y, self.statusWin))
-                    self.hmmerWorker.hmmSearchComplete.connect(lambda x: self.hmmSuccessCheck(x, self.statusWin))
-                    if not self.runnerThread:
-                        self.runnerThread = QThread()
-                    self.runnerThread.start()
-                    self.hmmerWorker.moveToThread(self.runnerThread)
-                    self.hmmerWorker.start.connect(self.hmmerWorker.run)
-                    self.hmmerWorker.start.emit()
+                    if self.verbose and self.lastSearch:
+                        print('HMM Check')
+                        print('Db Check',self.lastSearch['db'],self.pathToDatabase)
+                        print('Dict Check',self.lastSearch['hmmSet'],hmmSet)
+                        print('Eval Check',self.lastSearch['hmmEval'],self.nameToParamDict['hmmEval'])
+                    if self.lastSearch and self.lastSearch['id'] == self.searchName and self.lastSearch['db'] == self.pathToDatabase \
+                            and len(hmmSet - self.lastSearch['hmmSet']) == 0 \
+                            and   self.nameToParamDict['hmmEval'] <= self.lastSearch['hmmEval']:
+                        msg = QMessageBox()
+                        msg.setIcon(QMessageBox.Information)
+                        msg.setText("HMM Set is a subset of last search, skipping step.")
+                        msg.setStandardButtons(QMessageBox.Ok)
+                        msg.exec()
+                        self.hmmerSuccessful = True
+                        self.processResultsOptionalHits()
+                    else:
+                        self.hmmerWorker = runHmmerWorker(self.hmmFetchExec, self.hmmSearchExec,
+                                                          self.hmmDict, hmmSet, self.outputDir,self.searchName, self.pathToDatabase,
+                                                          self.nameToParamDict['hmmEval'])
+                        self.hmmerWorker.hmmDBbuilt.connect(lambda x, y: self.hmmDBbuiltCheck(x, y, self.statusWin))
+                        self.hmmerWorker.hmmSearchComplete.connect(lambda x: self.hmmSuccessCheck(x, self.statusWin))
+                        if not self.runnerThread:
+                            self.runnerThread = QThread()
+                        self.runnerThread.start()
+                        self.hmmerWorker.moveToThread(self.runnerThread)
+                        self.hmmerWorker.start.connect(self.hmmerWorker.run)
+                        self.hmmerWorker.start.emit()
                 else:
                     msg = QMessageBox()
                     msg.setIcon(QMessageBox.Information)
@@ -2040,6 +2100,12 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                     self.processResultsOptionalHits()
             else:
                 self.processResultsOptionalHits()
+        else:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Database Not Yet Checked...\nThis shouldn't happen. Email help.")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
     @pyqtSlot(bool,list)
     def hmmDBbuiltCheck(self,flag,hmmsNotFetched,statusWin):
         if flag:
@@ -2079,15 +2145,16 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
     ### Process Filtered Clusters
     def processResultsOptionalHits(self):
         self.updateStatusWinText(self.statusWin, 'Parsing Output Files: Creating Search Lists', '4/6', 4)
-        if self.checkSuccessful and self.blastSuccessful and self.hmmerSuccessful:
+        checkSuccessful = self.dbsChecked.get(self.pathToDatabase, False)
+        if checkSuccessful and self.blastSuccessful and self.hmmerSuccessful:
             requiredBlastList = []
             requiredHmmList = []
 
             optionalBlastList = []
             optionalHmmList = []
 
-            blastOutFile = self.outputDir + "/blast_results.out"
-            hmmOutFile = self.outputDir + '/hmmSearch.out'
+            blastOutFile = os.path.join(self.outputDir,"{}_blast_results.out".format(self.searchName))
+            hmmOutFile = os.path.join(self.outputDir,'{}_hmmSearch.out'.format(self.searchName))
 
             for idx in range(self.searchList.rowCount()):
                 if self.searchList.item(idx, 0).text() == 'HMMER Hits':
@@ -2100,7 +2167,9 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                         requiredBlastList.append(self.searchList.item(idx, 1).text())
                     else:
                         optionalBlastList.append(self.searchList.item(idx, 1).text())
-
+            if self.verbose:
+                print('BLAST',requiredBlastList)
+                print('HMM',requiredHmmList)
             passBLASTcheck = False
             passHMMcheck = False
 
@@ -2112,7 +2181,6 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 msg.setStandardButtons(QMessageBox.Ok)
                 msg.exec()
                 self.statusWin.close()
-                self.checkSuccessful = False
                 if self.runnerThread:
                     self.runnerThread.terminate()
                 return
@@ -2129,7 +2197,6 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                         msg.setStandardButtons(QMessageBox.Ok)
                         msg.exec()
                         self.statusWin.close()
-                        self.checkSuccessful = False
                         if self.runnerThread:
                             self.runnerThread.terminate()
                         self.setEnabled(True)
@@ -2148,7 +2215,6 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                         msg.setStandardButtons(QMessageBox.Ok)
                         msg.exec()
                         self.statusWin.close()
-                        self.checkSuccessful = False
                         if self.runnerThread:
                             self.runnerThread.terminate()
                         self.setEnabled(True)
@@ -2165,7 +2231,9 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                     self.runnerThread = QThread()
                 self.runnerThread.start()
                 self.processSearchListWorker = runProcessSearchListOptionalHits(requiredBlastList,requiredHmmList,
-                                                                                    blastOutFile,hmmOutFile,
+                                                                                    blastOutFile,
+                                                                                    self.nameToParamDict['blastEval'],
+                                                                                    hmmOutFile,
                                                                                     self.nameToParamDict['hmmScore'],
                                                                                     self.nameToParamDict['hmmDomLen'],
                                                                                     self.nameToParamDict['windowSize'],
@@ -2181,6 +2249,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
     @pyqtSlot(dict)
     def generateResults(self,filteredClusters,statusWin,blastList,hmmList):
         self.setEnabled(True)
+        self.updateLastSearch()
         if filteredClusters:
             self.updateStatusWinText(statusWin, 'Search Complete',
                                      '6/6', 6)
@@ -2191,7 +2260,6 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         else:
             self.updateStatusWinText(statusWin, 'Search Complete: No Results Found',
                                      '6/6', 6)
-            self.checkSuccessful = False
             statusWin.viewResultsBtn.setText('Close')
             statusWin.viewResultsBtn.setEnabled(True)
             statusWin.cancelBtn.setEnabled(False)
@@ -2335,7 +2403,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             self.searchList.resizeColumnsToContents()
             self.updateSpinBox()
             if self.verbose:
-                print(self.forHmmer)
+                print('For Hmmer:',self.forHmmer)
             self.hmmList.clearSelection()
         else:
             msg = QMessageBox()
@@ -2352,7 +2420,11 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.geneDict = dict()
     def clearHMM(self):
         self.hmmList.clear()
-        self.hmmDict = dict()
+        hmmerSearchKeys = set()
+        hmmerSearchKeys.update(*self.forHmmer.keys())
+        keysToDel = set(key for key in self.hmmDict.keys() if key not in hmmerSearchKeys)
+        for key in keysToDel:
+            del self.hmmDict[key]
 
 def main():
 

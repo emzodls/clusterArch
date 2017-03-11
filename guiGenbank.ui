@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>774</width>
-    <height>574</height>
+    <height>552</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -39,7 +39,7 @@
        </sizepolicy>
       </property>
       <property name="currentIndex">
-       <number>1</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="prepareDatabase">
        <property name="sizePolicy">
@@ -58,7 +58,7 @@
         <item>
          <widget class="QToolBox" name="toolBox">
           <property name="currentIndex">
-           <number>3</number>
+           <number>0</number>
           </property>
           <property name="tabSpacing">
            <number>-1</number>
@@ -68,8 +68,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>811</width>
-             <height>486</height>
+             <width>705</width>
+             <height>373</height>
             </rect>
            </property>
            <attribute name="label">
@@ -525,8 +525,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>811</width>
-             <height>486</height>
+             <width>720</width>
+             <height>345</height>
             </rect>
            </property>
            <attribute name="label">
@@ -776,7 +776,7 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>796</width>
+             <width>705</width>
              <height>494</height>
             </rect>
            </property>
@@ -1364,7 +1364,7 @@
              <x>0</x>
              <y>0</y>
              <width>720</width>
-             <height>367</height>
+             <height>345</height>
             </rect>
            </property>
            <attribute name="label">
@@ -1984,10 +1984,20 @@
           </item>
           <item>
            <layout class="QHBoxLayout" name="horizontalLayout_9">
+            <property name="spacing">
+             <number>5</number>
+            </property>
             <item>
              <widget class="QLabel" name="databaseLabel_2">
               <property name="text">
                <string>Output Directory:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="Line" name="line_18">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
               </property>
              </widget>
             </item>
@@ -2013,6 +2023,48 @@
                 <string>Select Directory...</string>
                </property>
               </item>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="horizontalLayout_33">
+            <property name="spacing">
+             <number>8</number>
+            </property>
+            <item>
+             <widget class="QCheckBox" name="saveSearchChk">
+              <property name="text">
+               <string>Save Search</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="Line" name="line_20">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="label_31">
+              <property name="text">
+               <string>Search ID:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="Line" name="line_19">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="searchNameInput">
+              <property name="enabled">
+               <bool>true</bool>
+              </property>
              </widget>
             </item>
            </layout>
