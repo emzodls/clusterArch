@@ -37,6 +37,7 @@ from ncbiUtils import ncbiQuery,ncbiSummary,ncbiFetch,getGbkDlList,parseAssembly
 
 import mainGuiNCBI,resultsWindow,status,parameters,sys,createDbStatus,addGene,downloadNcbiFilesWin,gbDivSumWin, \
     ncbiGenomeSumWin,buildHmmWin, wget
+from pickle import load,dump
 #### NCBI Query Functions
 class ncbiQueryWorker(QObject):
     start = pyqtSignal()
@@ -351,7 +352,7 @@ class runBlastWorker(QObject):
             else:
                 self.dbCreated.emit(True)
         ### Run Blastp
-        inputFastas = os.path.join(self.outputDir, 'gene_queries.fa')
+        inputFastas = os.path.join(self.outputDir,'{}_gene_queries.fa'.format(self.searchName))
 
         if dbInOutputFolder:
             out, err, retcode = runBLAST(self.blastpExec, inputFastas, self.outputDir,self.searchName,
@@ -644,7 +645,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.clearGeneBtn.clicked.connect(self.clearGene)
         self.clearHMMbtn.clicked.connect(self.clearHMM)
 
-        self.runSearch.clicked.connect(self.runChecks)
+        self.runSearch.clicked.connect(self.checkOutputDir)
 
         self.closeBtn.clicked.connect(QCoreApplication.instance().quit)
 
@@ -1514,6 +1515,36 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             msg.exec()
 
     ### Utility Functions
+
+    def saveSearchFiles(self):
+        if not os.path.isdir(os.path.join(self.outputDir,self.searchName)):
+            os.mkdir(os.path.join(self.outputDir,self.searchName))
+        blastOutFile = os.path.join(self.outputDir, "{}_blast_results.out".format(self.searchName))
+        blastProts = set()
+        if os.path.isfile(blastOutFile):
+            with open(os.path.join(self.outputDir,self.searchName,'{}.clusterTools.blast'.format(self.searchName)),'w') as blastResults:
+                for line in open(blastOutFile):
+                    blastProts.add(line.split('\t')[0].strip())
+                    blastResults.write('{}\n'.format(line.strip()))
+        hmmOutFile = os.path.join(self.outputDir, '{}_hmmSearch.out'.format(self.searchName))
+        hmms = set()
+        if os.path.isfile(hmmOutFile):
+            with open(os.path.join(self.outputDir, self.searchName, '{}.clusterTools.hmmer'.format(self.searchName)),'w') as hmmerResults:
+                for line in open(hmmOutFile):
+                    hmmerResults.write('{}\n'.format(line.strip()))
+                    if '#' not in line:
+                        hmms.add(line.split()[3].strip())
+        summaryFile = dict()
+        summaryFile['db'] = self.pathToDatabase
+        summaryFile['id'] = self.searchName
+        summaryFile['blastEval'] = self.nameToParamDict['blastEval']
+        summaryFile['hmmEval'] = self.nameToParamDict['hmmEval']
+        summaryFile['BLAST'] = blastProts
+        summaryFile['HMMer'] = hmms
+        summaryFile['blastOut'] = os.path.join(self.outputDir,self.searchName,'{}.clusterTools.blast'.format(self.searchName))
+        summaryFile['hmmerOut'] = os.path.join(self.outputDir, self.searchName, '{}.clusterTools.hmmer'.format(self.searchName))
+        dump(summaryFile,open(os.path.join(self.outputDir,self.searchName,'{}.clusterTools.summary'.format(self.searchName)),'wb'))
+
     def updateLastSearch(self):
         self.lastSearch['db'] = self.pathToDatabase
         self.lastSearch['id'] = self.searchName
@@ -1826,6 +1857,21 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 msg.exec()
 
     ### Run Permissions Checks
+
+    def checkOutputDir(self):
+        if self.saveSearchChk.checkState() == 2 and os.path.isdir(os.path.join(self.outputDir,self.searchName)):
+            buttonReply = QMessageBox.question(self, 'Overwrite Saved Output Directory',
+                                               "The directory where the output will be saved exists.\n"
+                                               "Do you want to overwrite the directory? \n"
+                                               "(Change Search Name to Avoid Overwriting)",
+                                               QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if buttonReply == QMessageBox.No:
+                self.searchNameInput.setText('')
+            else:
+                self.runChecks()
+        else:
+            self.runChecks()
+
     def runChecks(self):
         if self.searchList.rowCount() >= 1:
             searchName = self.searchNameInput.text().strip()
@@ -2222,6 +2268,8 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 else:
                     passHMMcheck = True
             if passBLASTcheck and passHMMcheck:
+                if self.saveSearchChk.checkState() == 2:
+                    self.saveSearchFiles()
                 self.updateStatusWinText(self.statusWin,
                                          'Output Files Parsed. Searching for Clusters.\n'
                                          '(Minimum Domain Score: %i, Minimum Domain Length: %i Window Size: %i)'
@@ -2323,7 +2371,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             self.pathToDatabase = self.dataBaseSelector.currentText()
             if self.verbose: print(self.pathToDatabase)
     def openGene(self):
-        fileName, _ = QFileDialog.getOpenFileName(self)
+        fileName, _ = QFileDialog.getOpenFileName(self,filter="Fasta Files (*.fa *.fasta)")
         if self.verbose: print(fileName)
         if fileName:
             self.GeneFilePath.setText(fileName)
