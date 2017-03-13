@@ -650,9 +650,35 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.closeBtn.clicked.connect(QCoreApplication.instance().quit)
 
         self.dataBaseSelector.currentIndexChanged.connect(self.databaseFunction)
-        self.dataBaseSelector.activated.connect(self.databaseFunction)
         self.outputDirectorySelector.currentIndexChanged.connect(self.outdirFunction)
-        self.outputDirectorySelector.activated.connect(self.outdirFunction)
+        ###### Saved Results Variables
+        self.SavedResultSummary = dict()
+        self.savedResultsBtns = [self.savedAddGeneBtn,self.savedAddHmmBtn,self.savedRemoveSearchTermBtn,
+                                 self.savedParamsBtn,self.runSavedSearchBtn]
+
+        self.savedResultsSelector.currentIndexChanged.connect(self.loadResults)
+        self.savedSearchList.itemChanged.connect(self.updateSavedSpinBox)
+        self.savedAddGeneBtn.clicked.connect(self.savedAddGene)
+        self.savedAddHmmBtn.clicked.connect(self.savedAddHmm)
+        self.savedRemoveSearchTermBtn.clicked.connect(self.savedRemoveSearchTerm)
+        self.savedParamsBtn.clicked.connect(self.editSavedSearchParams)
+        self.runSavedSearchBtn.clicked.connect(self.runSavedSearch)
+        self.savedSearchGenes = set()
+        self.savedTotalHitsRequired = 0
+
+        self.nameToSavedParamDict = {'blastEval': 1e-5, 'hmmEval': 1e-5, 'hmmScore': 30,
+                                'hmmDomLen': 15, 'windowSize': 50000}
+        self.maxEvals = {'blastEval': 1e-5, 'hmmEval': 1e-5}
+
+        self.savedParamsWin = paramsWindow()
+
+        self.savedParamsWin.blastEval.textChanged.connect(lambda: self.activateApply(self.savedParamsWin))
+        self.savedParamsWin.hmmEval.textChanged.connect(lambda: self.activateApply(self.savedParamsWin))
+        self.savedParamsWin.hmmDomLen.textChanged.connect(lambda: self.activateApply(self.savedParamsWin))
+        self.savedParamsWin.hmmScore.textChanged.connect(lambda: self.activateApply(self.savedParamsWin))
+        self.savedParamsWin.windowSize.textChanged.connect(lambda: self.activateApply(self.savedParamsWin))
+        self.savedParamsWin.applyBtn.clicked.connect(self.updateSavedParams)
+
 
         #### Rename Genes in Gene List on Double Click
         self.geneList.currentRowChanged.connect(self.updateSelectedGene)
@@ -664,11 +690,11 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         ### Initialize settings for parameters window
         self.paramsWin = paramsWindow()
 
-        self.paramsWin.blastEval.textChanged.connect(self.activateApply)
-        self.paramsWin.hmmEval.textChanged.connect(self.activateApply)
-        self.paramsWin.hmmDomLen.textChanged.connect(self.activateApply)
-        self.paramsWin.hmmScore.textChanged.connect(self.activateApply)
-        self.paramsWin.windowSize.textChanged.connect(self.activateApply)
+        self.paramsWin.blastEval.textChanged.connect(lambda: self.activateApply(self.paramsWin))
+        self.paramsWin.hmmEval.textChanged.connect(lambda: self.activateApply(self.paramsWin))
+        self.paramsWin.hmmDomLen.textChanged.connect(lambda: self.activateApply(self.paramsWin))
+        self.paramsWin.hmmScore.textChanged.connect(lambda: self.activateApply(self.paramsWin))
+        self.paramsWin.windowSize.textChanged.connect(lambda: self.activateApply(self.paramsWin))
         self.paramsWin.applyBtn.clicked.connect(self.updateParams)
         self.setParamsBtn.clicked.connect(self.showParamWindow)
     ##### NCBI File Query Functions #########
@@ -1539,10 +1565,17 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         summaryFile['id'] = self.searchName
         summaryFile['blastEval'] = self.nameToParamDict['blastEval']
         summaryFile['hmmEval'] = self.nameToParamDict['hmmEval']
-        summaryFile['BLAST'] = blastProts
-        summaryFile['HMMer'] = hmms
-        summaryFile['blastOut'] = os.path.join(self.outputDir,self.searchName,'{}.clusterTools.blast'.format(self.searchName))
-        summaryFile['hmmerOut'] = os.path.join(self.outputDir, self.searchName, '{}.clusterTools.hmmer'.format(self.searchName))
+        if blastProts:
+            summaryFile['BLAST'] = blastProts
+            summaryFile['blastOut'] = os.path.join(self.outputDir, self.searchName,
+                                                   '{}.clusterTools.blast'.format(self.searchName))
+        else:
+            summaryFile['BLAST'] = None
+        if hmms:
+            summaryFile['HMMer'] = hmms
+            summaryFile['hmmerOut'] = os.path.join(self.outputDir, self.searchName, '{}.clusterTools.hmmer'.format(self.searchName))
+        else:
+            summaryFile['HMMer'] = None
         dump(summaryFile,open(os.path.join(self.outputDir,self.searchName,'{}.clusterTools.summary'.format(self.searchName)),'wb'))
 
     def updateLastSearch(self):
@@ -1587,8 +1620,8 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.paramsWin.windowSize.setText(str(self.nameToParamDict[self.paramsWin.windowSize.objectName()]))
         self.paramsWin.show()
 
-    def activateApply(self):
-        self.paramsWin.applyBtn.setEnabled(True)
+    def activateApply(self,paramsWin):
+        paramsWin.applyBtn.setEnabled(True)
 
     ### Genbank Panel Functions
     def loadGbkDir(self):
@@ -1710,8 +1743,8 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.setEnabled(True)
 
     ### Results Window Methods
-    def showResultsWindow(self,blastList,hmmList,filteredClusters):
-        self.statusWin.close()
+    def showResultsWindow(self,statusWin,blastList,hmmList,filteredClusters):
+        statusWin.close()
         #self.checkSuccessful = False
         self.resultsWin = resultsWindow()
 
@@ -2295,14 +2328,15 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 self.processSearchListWorker.start.emit()
 
     @pyqtSlot(dict)
-    def generateResults(self,filteredClusters,statusWin,blastList,hmmList):
+    def generateResults(self,filteredClusters,statusWin,blastList,hmmList,savedSearch=False):
         self.setEnabled(True)
-        self.updateLastSearch()
+        if savedSearch:
+            self.updateLastSearch()
         if filteredClusters:
             self.updateStatusWinText(statusWin, 'Search Complete',
                                      '6/6', 6)
             statusWin.viewResultsBtn.setEnabled(True)
-            statusWin.viewResultsBtn.clicked.connect(lambda: self.showResultsWindow(blastList,hmmList,filteredClusters))
+            statusWin.viewResultsBtn.clicked.connect(lambda: self.showResultsWindow(statusWin,blastList,hmmList,filteredClusters))
             if self.runnerThread:
                 self.runnerThread.terminate()
         else:
@@ -2357,19 +2391,26 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             dirName = QFileDialog.getExistingDirectory(self)
             if dirName:
                 self.outputDirectorySelector.addItem(dirName)
+                self.outputDir = self.outputDirectorySelector.currentText()
                 self.outputDirectorySelector.setCurrentIndex(self.outputDirectorySelector.count()-1)
+            else:
+                self.outputDirectorySelector.setCurrentIndex(-1)
         if 'Select Directory...' not in self.outputDirectorySelector.currentText():
             self.outputDir = self.outputDirectorySelector.currentText()
-            if self.verbose: print(self.outputDir)
+        if self.verbose: print(self.outputDir)
     def databaseFunction(self):
         if 'add database...' in self.dataBaseSelector.currentText():
-            fileName, _ = QFileDialog.getOpenFileName(self)
+            fileName, _ = QFileDialog.getOpenFileName(self,filter="Fasta Files (*.fa *.fasta)")
             if fileName:
                 self.dataBaseSelector.addItem(fileName)
+                self.pathToDatabase = self.dataBaseSelector.currentText()
                 self.dataBaseSelector.setCurrentIndex(self.dataBaseSelector.count()-1)
+            else:
+                self.dataBaseSelector.setCurrentIndex(-1)
         if 'add database...' not in self.dataBaseSelector.currentText():
             self.pathToDatabase = self.dataBaseSelector.currentText()
-            if self.verbose: print(self.pathToDatabase)
+        if self.verbose:
+            print(self.pathToDatabase)
     def openGene(self):
         fileName, _ = QFileDialog.getOpenFileName(self,filter="Fasta Files (*.fa *.fasta)")
         if self.verbose: print(fileName)
@@ -2473,6 +2514,327 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         keysToDel = set(key for key in self.hmmDict.keys() if key not in hmmerSearchKeys)
         for key in keysToDel:
             del self.hmmDict[key]
+    ######### Load Results Functions
+    def reinitializeSavedSearch(self):
+        self.savedGeneList.clear()
+        self.savedHmmList.clear()
+        self.savedSearchList.setRowCount(0)
+        self.savedSearchGenes = set()
+        self.savedTotalHitsRequired = 0
+        self.savedDbName.setText('')
+        self.savedSearchKey.setText('')
+        self.nameToSavedParamDict = {'blastEval': 1e-5, 'hmmEval': 1e-5, 'hmmScore': 30,
+                                'hmmDomLen': 15, 'windowSize': 50000}
+        self.maxEvals = {'blastEval': 1e-5, 'hmmEval': 1e-5}
+        for btn in self.savedResultsBtns:
+            btn.setEnabled(False)
+
+    def loadResults(self):
+        def populateWindows(self,resultsFile):
+            try:
+                resultsFilePath,resultsFileName = os.path.split(resultsFile)
+                self.SavedResultSummary = load(open(resultsFile,'rb'))
+                if self.verbose:
+                    print('Parsing',resultsFile)
+                    print(self.SavedResultSummary['BLAST'],self.SavedResultSummary['blastOut'])
+                    print(self.SavedResultSummary['HMMer'],self.SavedResultSummary['hmmerOut'])
+                genes = self.SavedResultSummary['BLAST']
+                hmms =  self.SavedResultSummary['HMMer']
+                if genes:
+                    blastOutPath,blastOutName = os.path.split(self.SavedResultSummary['blastOut'])
+                    if self.verbose:
+                        print('Blast Results File Path',os.path.join(resultsFilePath,blastOutName))
+                if hmms:
+                    hmmOutPath,hmmOutName = os.path.split(self.SavedResultSummary['hmmerOut'])
+                    if self.verbose:
+                        print('Hmmer Results File Path',os.path.join(resultsFilePath,hmmOutName))
+                dbPath,dbName = os.path.split(self.SavedResultSummary['db'])
+                id = self.SavedResultSummary['id']
+                ## Run check that the blast and hmm results files exist and are readable (check current directory and absolute path)
+                if not genes:
+                    blastCheck = True
+                elif os.path.isfile(os.path.join(resultsFilePath,blastOutName)) and os.access(os.path.join(resultsFilePath,blastOutName), os.R_OK):
+                    blastCheck = True
+                    self.SavedResultSummary['blastOut'] = os.path.join(resultsFilePath,blastOutName)
+                elif os.path.isfile(self.SavedResultSummary['blastOut']) and os.access(self.SavedResultSummary['blastOut'], os.R_OK):
+                    blastCheck = True
+                else:
+                    blastCheck = False
+                if not hmms:
+                    hmmCheck = True
+                elif os.path.isfile(os.path.join(resultsFilePath,hmmOutName)) and os.access(os.path.join(resultsFilePath,hmmOutName), os.R_OK):
+                    hmmCheck = True
+                    self.SavedResultSummary['hmmerOut'] = os.path.join(resultsFilePath, hmmOutName)
+                elif os.path.isfile(self.SavedResultSummary['hmmerOut']) and os.access(self.SavedResultSummary['hmmerOut'], os.R_OK):
+                    hmmCheck = True
+                else:
+                    hmmCheck = False
+
+                if hmmCheck and blastCheck:
+                    print('done checks')
+                    #### reinitialize savedSearch
+                    self.maxEvals['blastEval'] = float(self.SavedResultSummary['blastEval'])
+                    self.maxEvals['hmmEval'] = float(self.SavedResultSummary['hmmEval'])
+                    self.nameToSavedParamDict['blastEval'] = min(1e-5,self.maxEvals['blastEval'])
+                    self.nameToSavedParamDict['hmmEval'] = min(1e-5,self.maxEvals['hmmEval'])
+                    ## load genes and hmms in list and activate buttons
+                    for gene in genes:
+                        self.savedGeneList.addItem(gene)
+                    for hmm in hmms:
+                        self.savedHmmList.addItem(hmm)
+                    for btn in self.savedResultsBtns:
+                        btn.setEnabled(True)
+                    self.savedDbName.setText(dbName)
+                    self.savedSearchKey.setText(id)
+                else:
+                    raise Exception
+            except Exception as e:
+                if self.verbose:
+                    print(e)
+                self.reinitializeSavedSearch()
+                self.savedResultsSelector.setCurrentIndex(-1)
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setText("Loading Results Failed")
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec()
+        # first check results file
+        if 'Select Results File...' in self.savedResultsSelector.currentText():
+            resultsFile, _ = QFileDialog.getOpenFileName(self,filter="Cluster Tools Search Summary (*.summary)")
+            if resultsFile:
+                self.reinitializeSavedSearch()
+                populateWindows(self,resultsFile)
+                self.savedResultsSelector.addItem(resultsFile)
+                self.savedResultsSelector.setCurrentIndex(self.savedResultsSelector.count() - 1)
+            else:
+                self.savedResultsSelector.setCurrentIndex(-1)
+        if self.savedResultsSelector.currentText() and 'Select Results File...' not in self.savedResultsSelector.currentText():
+            self.reinitializeSavedSearch()
+            resultsFile = self.savedResultsSelector.currentText()
+            populateWindows(self,resultsFile)
+
+    def updateSavedSpinBox(self):
+        if self.savedSearchList.rowCount() == 0:
+            self.savedHitsNeededSpinBox.setEnabled(False)
+        else:
+            maxHits = self.savedSearchList.rowCount()
+            minHits = sum(1 for idx in range(self.savedSearchList.rowCount())
+                          if self.savedSearchList.item(idx,2) and
+                          self.savedSearchList.item(idx,2).checkState()==2)
+            if self.verbose:
+                print("Setting range: %i-%i" % (minHits,maxHits))
+            self.savedHitsNeededSpinBox.setRange(minHits,maxHits)
+            self.savedHitsNeededSpinBox.setValue(minHits)
+            self.savedHitsNeededSpinBox.setEnabled(True)
+        self.savedTotalHitsRequired = self.savedHitsNeededSpinBox.value()
+        if self.verbose:
+            print("Total Hits Required: ",self.totalHitsRequired)
+
+    def savedAddGene(self):
+        genesToAdd = self.savedGeneList.selectedItems()
+        for gene in genesToAdd:
+            if gene.text() not in self.savedSearchGenes:
+                currentRowCount = self.savedSearchList.rowCount()
+                checkbox = QTableWidgetItem()
+                checkbox.setFlags(Qt.ItemIsUserCheckable|Qt.ItemIsEditable|Qt.ItemIsEnabled)
+                checkbox.setCheckState(2)
+                self.savedSearchList.insertRow(currentRowCount)
+                self.savedSearchList.setItem(currentRowCount,0,QTableWidgetItem('GENE'))
+                self.savedSearchList.setItem(currentRowCount,1,QTableWidgetItem(gene.text()))
+                self.savedSearchList.setItem(currentRowCount,2,checkbox)
+                self.savedSearchList.resizeColumnsToContents()
+                self.savedSearchGenes.add(gene.text())
+                self.updateSavedSpinBox()
+
+    def savedAddHmm(self):
+        hmmsToAdd = tuple(sorted(hmmObject.text() for hmmObject in self.savedHmmList.selectedItems()))
+        if hmmsToAdd:
+            if self.savedSearchList.rowCount() == 0:
+                self.savedHitsNeededSpinBox.setRange(1, 1)
+                self.savedHitsNeededSpinBox.setEnabled(True)
+            currentRowCount = self.savedSearchList.rowCount()
+            checkbox = QTableWidgetItem()
+            checkbox.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEditable | Qt.ItemIsEnabled)
+            checkbox.setCheckState(2)
+            self.savedSearchList.insertRow(currentRowCount)
+            self.savedSearchList.setItem(currentRowCount, 0, QTableWidgetItem('HMMER Hits'))
+            self.savedSearchList.setItem(currentRowCount, 1, QTableWidgetItem(' and '.join(hmmsToAdd)))
+            self.savedSearchList.setItem(currentRowCount, 2, checkbox)
+            self.savedSearchList.resizeColumnsToContents()
+            self.updateSavedSpinBox()
+            self.savedHmmList.clearSelection()
+        else:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Warning)
+            msg.setText('No HMMs Selected')
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+    def savedRemoveSearchTerm(self):
+        itemType =  self.savedSearchList.item(self.savedSearchList.currentRow(),0).text()
+        termToRemove = self.savedSearchList.item(self.savedSearchList.currentRow(),1).text()
+        if itemType == 'GENE':
+            if self.verbose:
+                print("Deleted %s" % termToRemove)
+            self.savedSearchGenes.remove(termToRemove)
+            self.savedSearchList.removeRow(self.savedSearchList.currentRow())
+        elif itemType == 'HMMER Hits':
+            self.savedSearchList.removeRow(self.savedSearchList.currentRow())
+        self.updateSavedSpinBox()
+    def editSavedSearchParams(self):
+        self.savedParamsWin.blastEval.setText(str(self.nameToSavedParamDict[self.savedParamsWin.blastEval.objectName()]))
+        self.savedParamsWin.hmmEval.setText(str(self.nameToSavedParamDict[self.savedParamsWin.hmmEval.objectName()]))
+        self.savedParamsWin.hmmDomLen.setText(str(self.nameToSavedParamDict[self.savedParamsWin.hmmDomLen.objectName()]))
+        self.savedParamsWin.hmmScore.setText(str(self.nameToSavedParamDict[self.savedParamsWin.hmmScore.objectName()]))
+        self.savedParamsWin.windowSize.setText(str(self.nameToSavedParamDict[self.savedParamsWin.windowSize.objectName()]))
+        self.savedParamsWin.show()
+
+    def updateSavedParams(self):
+        parameterObjs = [self.savedParamsWin.blastEval, self.savedParamsWin.hmmEval, self.savedParamsWin.hmmDomLen,
+                         self.savedParamsWin.hmmScore, self.savedParamsWin.windowSize]
+        print(self.nameToSavedParamDict)
+        for parameter in parameterObjs:
+            parameterName = parameter.objectName()
+            validator = parameter.validator()
+            state = validator.validate(parameter.text(), 0)[0]
+            if state == QtGui.QValidator.Acceptable:
+                if parameterName in {'blastEval', 'hmmEval'} :
+                    if float(parameter.text()) <= self.maxEvals[parameterName]:
+                        self.nameToSavedParamDict[parameterName] = float(parameter.text())
+                    else:
+                        msg = QMessageBox()
+                        msg.setIcon(QMessageBox.Warning)
+                        msg.setText('Selected %s E-value is larger than in the search used.\n Please choose an'
+                                    ' E-value that is less than or equal to %.4g' % (parameterName,self.maxEvals[parameterName]))
+                        msg.setStandardButtons(QMessageBox.Ok)
+                        msg.exec()
+                        parameter.setText(str(self.nameToSavedParamDict[parameterName]))
+                else:
+                    self.nameToSavedParamDict[parameterName] = int(parameter.text())
+            else:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Warning)
+                msg.setText('Please Input a Valid Value for %s' % parameterName)
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec()
+                parameter.setText(str(self.nameToSavedParamDict[parameterName]))
+        print(self.nameToSavedParamDict)
+        self.savedParamsWin.applyBtn.setEnabled(False)
+
+    def runSavedSearch(self):
+        self.setEnabled(False)
+        self.savedSearchstatusWin = statusWindow()
+        self.updateStatusWinText(self.savedSearchstatusWin, 'Creating Search Lists', '3/6', 3)
+
+        self.savedSearchstatusWin.percentCmpBar.setMaximum(6)
+        self.savedSearchstatusWin.cancelBtn.setVisible(False)
+        self.savedSearchstatusWin.show()
+
+        requiredBlastList = []
+        requiredHmmList = []
+
+        optionalBlastList = []
+        optionalHmmList = []
+
+        for idx in range(self.savedSearchList.rowCount()):
+            if self.savedSearchList.item(idx, 0).text() == 'HMMER Hits':
+                if self.savedSearchList.item(idx, 2).checkState() == 2:
+                    requiredHmmList.append(tuple(sorted(self.savedSearchList.item(idx, 1).text().split(' and '))))
+                else:
+                    optionalHmmList.append(tuple(sorted(self.savedSearchList.item(idx, 1).text().split(' and '))))
+            elif self.savedSearchList.item(idx, 0).text() == 'GENE':
+                if self.savedSearchList.item(idx, 2).checkState() == 2:
+                    requiredBlastList.append(self.savedSearchList.item(idx, 1).text())
+                else:
+                    optionalBlastList.append(self.savedSearchList.item(idx, 1).text())
+        if self.verbose:
+            print('BLAST', requiredBlastList)
+            print('HMM', requiredHmmList)
+
+        self.updateStatusWinText(self.savedSearchstatusWin, 'Checking Blast and Hmmer Outputs', '4/6', 4)
+
+        blastOutFile = self.SavedResultSummary['blastOut']
+        hmmOutFile = self.SavedResultSummary['hmmerOut']
+
+
+        passBLASTcheck = False
+        passHMMcheck = False
+        if self.verbose:
+            print('BLAST FILE:',blastOutFile)
+            print('Hmmer File:',hmmOutFile)
+
+        if len(requiredBlastList) + len(requiredHmmList) + len(optionalBlastList) + len(optionalHmmList) == 0:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText('No HMM Hits or Genes Included in Search List')
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+            self.savedSearchstatusWin.close()
+            if self.runnerThread:
+                self.runnerThread.terminate()
+            return
+        else:
+            if requiredBlastList or optionalBlastList:
+                try:
+                    assert os.path.isfile(blastOutFile), "BLAST Hits included in search but no " \
+                                                             "BLAST output file found"
+                    passBLASTcheck = True
+                except AssertionError:
+                    msg = QMessageBox()
+                    msg.setIcon(QMessageBox.Critical)
+                    msg.setText('BLAST Hits included in search but no BLAST output file found!')
+                    msg.setStandardButtons(QMessageBox.Ok)
+                    msg.exec()
+                    self.savedSearchstatusWin.close()
+                    if self.runnerThread:
+                        self.runnerThread.terminate()
+                    self.setEnabled(True)
+                    return
+            else:
+                passBLASTcheck = True
+            if requiredHmmList or optionalHmmList:
+                try:
+                    assert os.path.isfile(hmmOutFile), "HMMer Hits included in search but no " \
+                                                       "HMMer output file found"
+                    passHMMcheck = True
+                except AssertionError:
+                    msg = QMessageBox()
+                    msg.setIcon(QMessageBox.Critical)
+                    msg.setText('HMMer Hits requested in search but no HMMer output file found!')
+                    msg.setStandardButtons(QMessageBox.Ok)
+                    msg.exec()
+                    self.savedSearchstatusWin.close()
+                    if self.runnerThread:
+                        self.runnerThread.terminate()
+                    self.setEnabled(True)
+                    return
+            else:
+                passHMMcheck = True
+
+            if passBLASTcheck and passHMMcheck:
+                self.updateStatusWinText(self.savedSearchstatusWin,
+                                         'Output Files Parsed. Searching for Clusters.\n'
+                                         '(Minimum Domain Score: %i, Minimum Domain Length: %i Window Size: %i)'
+                                         % (self.nameToSavedParamDict['hmmScore'], self.nameToSavedParamDict['hmmDomLen'],
+                                            self.nameToSavedParamDict['windowSize']),
+                                         '5/6', 5)
+                if not self.runnerThread:
+                    self.runnerThread = QThread()
+                self.runnerThread.start()
+                self.processSearchListWorker = runProcessSearchListOptionalHits(requiredBlastList, requiredHmmList,
+                                                                                blastOutFile,
+                                                                                self.nameToSavedParamDict['blastEval'],
+                                                                                hmmOutFile,
+                                                                                self.nameToSavedParamDict['hmmScore'],
+                                                                                self.nameToSavedParamDict['hmmDomLen'],
+                                                                                self.nameToSavedParamDict['windowSize'],
+                                                                                self.savedTotalHitsRequired,
+                                                                                optionalBlastList, optionalHmmList)
+                self.processSearchListWorker.result.connect(
+                    lambda x: self.generateResults(x, self.savedSearchstatusWin, requiredBlastList + optionalBlastList,
+                                                   requiredHmmList + optionalHmmList,savedSearch=True))
+                self.processSearchListWorker.moveToThread(self.runnerThread)
+                self.processSearchListWorker.start.connect(self.processSearchListWorker.run)
+                self.processSearchListWorker.start.emit()
 
 def main():
 

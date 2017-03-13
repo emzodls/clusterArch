@@ -261,7 +261,7 @@ def processSearchListOptionalHits(requiredBlastList,requiredHmmList,blastOutFile
     hitProteins.update(*requiredHitDict.values())
     hitProteins.update(*additionalHitDict.values())
 
-    putativeClusters = clusterAnalysis.cluster_proteins(hitProteins,windowSize)
+    putativeClusters = clusterAnalysis.clusterProteins(hitProteins,windowSize)
 
     assert totalHitsRequired >= numReqHits
 
@@ -389,7 +389,7 @@ def proccessGbks(taskList,outputDir,guiSignal=None):
                 prot_seqs = []
                 species_id = genbank_entry.id
                 if species_id in speciesList:
-                    species_id = species_base + '.entry%.3i' % entry_ctr
+                    species_id = species_base + '.entry%.4i' % entry_ctr
                 # check for uniqueness, if there is already an entry on the list insert random number
                 ## Check if it is an antismash file
                 clusters = [cluster for cluster in genbank_entry.features if cluster.type == 'cluster']
@@ -413,7 +413,7 @@ def proccessGbks(taskList,outputDir,guiSignal=None):
                 species_id = species_id.strip()
                 if species_id in speciesList:
                     splitSpecies = species_id.split('.entry')[0]
-                    species_id = splitSpecies + '%.5i.entry%.3i'.format((random()*10000),entry_ctr)
+                    species_id = splitSpecies + '{:05d}.entry{:04d}'.format(int(random()*10000),int(entry_ctr))
                     speciesList.add(species_id)
                 else:
                     speciesList.add(species_id)
