@@ -1570,12 +1570,14 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             summaryFile['blastOut'] = os.path.join(self.outputDir, self.searchName,
                                                    '{}.clusterTools.blast'.format(self.searchName))
         else:
-            summaryFile['BLAST'] = None
+            summaryFile['BLAST'] = []
+            summaryFile['blastOut'] = None
         if hmms:
             summaryFile['HMMer'] = hmms
             summaryFile['hmmerOut'] = os.path.join(self.outputDir, self.searchName, '{}.clusterTools.hmmer'.format(self.searchName))
         else:
-            summaryFile['HMMer'] = None
+            summaryFile['HMMer'] = []
+            summaryFile['hmmerOut'] = None
         dump(summaryFile,open(os.path.join(self.outputDir,self.searchName,'{}.clusterTools.summary'.format(self.searchName)),'wb'))
 
     def updateLastSearch(self):
@@ -2368,24 +2370,25 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             print("Total Hits Required: ",self.totalHitsRequired)
 
     def removeSearchTerm(self):
-        itemType =  self.searchList.item(self.searchList.currentRow(),0).text()
-        termToRemove = self.searchList.item(self.searchList.currentRow(),1).text()
-        if itemType == 'GENE':
-            if self.verbose:
-                print("Deleted %s" % termToRemove)
-            del self.forBLAST[termToRemove]
-            self.searchList.removeRow(self.searchList.currentRow())
-        elif itemType == 'HMMER Hits':
-            hmmKey = tuple(sorted(termToRemove.split(' and ')))
-            hmmerSearchTerms = Counter()
-            for idx in range(self.searchList.rowCount()):
-                if self.searchList.item(idx,0).text() == 'HMMER Hits':
-                    hmmerSearchTerms[tuple(sorted(self.searchList.item(idx,1).text().split(' and ')))] += 1
-            if hmmerSearchTerms[hmmKey] <= 1:
-                del self.forHmmer[hmmKey]
-            if self.verbose: print(self.forHmmer)
-            self.searchList.removeRow(self.searchList.currentRow())
-        self.updateSpinBox()
+        if self.searchList.item(self.searchList.currentRow(),0):
+            itemType =  self.searchList.item(self.searchList.currentRow(),0).text()
+            termToRemove = self.searchList.item(self.searchList.currentRow(),1).text()
+            if itemType == 'GENE':
+                if self.verbose:
+                    print("Deleted %s" % termToRemove)
+                del self.forBLAST[termToRemove]
+                self.searchList.removeRow(self.searchList.currentRow())
+            elif itemType == 'HMMER Hits':
+                hmmKey = tuple(sorted(termToRemove.split(' and ')))
+                hmmerSearchTerms = Counter()
+                for idx in range(self.searchList.rowCount()):
+                    if self.searchList.item(idx,0).text() == 'HMMER Hits':
+                        hmmerSearchTerms[tuple(sorted(self.searchList.item(idx,1).text().split(' and ')))] += 1
+                if hmmerSearchTerms[hmmKey] <= 1:
+                    del self.forHmmer[hmmKey]
+                if self.verbose: print(self.forHmmer)
+                self.searchList.removeRow(self.searchList.currentRow())
+            self.updateSpinBox()
     def outdirFunction(self):
         if 'Select Directory...' in self.outputDirectorySelector.currentText():
             dirName = QFileDialog.getExistingDirectory(self)
@@ -2536,10 +2539,10 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 self.SavedResultSummary = load(open(resultsFile,'rb'))
                 if self.verbose:
                     print('Parsing',resultsFile)
-                    print(self.SavedResultSummary['BLAST'],self.SavedResultSummary['blastOut'])
-                    print(self.SavedResultSummary['HMMer'],self.SavedResultSummary['hmmerOut'])
-                genes = self.SavedResultSummary['BLAST']
-                hmms =  self.SavedResultSummary['HMMer']
+                    print(self.SavedResultSummary.get('BLAST',None),self.SavedResultSummary.get('blastOut',None))
+                    print(self.SavedResultSummary.get('HMMer',None),self.SavedResultSummary.get('hmmerOut',None))
+                genes = self.SavedResultSummary.get('BLAST',[])
+                hmms =  self.SavedResultSummary.get('HMMer',[])
                 if genes:
                     blastOutPath,blastOutName = os.path.split(self.SavedResultSummary['blastOut'])
                     if self.verbose:
@@ -2578,10 +2581,12 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                     self.nameToSavedParamDict['blastEval'] = min(1e-5,self.maxEvals['blastEval'])
                     self.nameToSavedParamDict['hmmEval'] = min(1e-5,self.maxEvals['hmmEval'])
                     ## load genes and hmms in list and activate buttons
-                    for gene in genes:
-                        self.savedGeneList.addItem(gene)
-                    for hmm in hmms:
-                        self.savedHmmList.addItem(hmm)
+                    if genes:
+                        for gene in genes:
+                            self.savedGeneList.addItem(gene)
+                    if hmms:
+                        for hmm in hmms:
+                            self.savedHmmList.addItem(hmm)
                     for btn in self.savedResultsBtns:
                         btn.setEnabled(True)
                     self.savedDbName.setText(dbName)
@@ -2670,16 +2675,17 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
     def savedRemoveSearchTerm(self):
-        itemType =  self.savedSearchList.item(self.savedSearchList.currentRow(),0).text()
-        termToRemove = self.savedSearchList.item(self.savedSearchList.currentRow(),1).text()
-        if itemType == 'GENE':
-            if self.verbose:
-                print("Deleted %s" % termToRemove)
-            self.savedSearchGenes.remove(termToRemove)
-            self.savedSearchList.removeRow(self.savedSearchList.currentRow())
-        elif itemType == 'HMMER Hits':
-            self.savedSearchList.removeRow(self.savedSearchList.currentRow())
-        self.updateSavedSpinBox()
+        if self.savedSearchList.item(self.savedSearchList.currentRow(),0):
+            itemType =  self.savedSearchList.item(self.savedSearchList.currentRow(),0).text()
+            termToRemove = self.savedSearchList.item(self.savedSearchList.currentRow(),1).text()
+            if itemType == 'GENE':
+                if self.verbose:
+                    print("Deleted %s" % termToRemove)
+                self.savedSearchGenes.remove(termToRemove)
+                self.savedSearchList.removeRow(self.savedSearchList.currentRow())
+            elif itemType == 'HMMER Hits':
+                self.savedSearchList.removeRow(self.savedSearchList.currentRow())
+            self.updateSavedSpinBox()
     def editSavedSearchParams(self):
         self.savedParamsWin.blastEval.setText(str(self.nameToSavedParamDict[self.savedParamsWin.blastEval.objectName()]))
         self.savedParamsWin.hmmEval.setText(str(self.nameToSavedParamDict[self.savedParamsWin.hmmEval.objectName()]))
@@ -2752,8 +2758,8 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
 
         self.updateStatusWinText(self.savedSearchstatusWin, 'Checking Blast and Hmmer Outputs', '4/6', 4)
 
-        blastOutFile = self.SavedResultSummary['blastOut']
-        hmmOutFile = self.SavedResultSummary['hmmerOut']
+        blastOutFile = self.SavedResultSummary.get('blastOut',None)
+        hmmOutFile = self.SavedResultSummary.get('hmmerOut',None)
 
 
         passBLASTcheck = False
