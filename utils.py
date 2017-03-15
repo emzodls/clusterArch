@@ -271,10 +271,25 @@ def processSearchListOptionalHits(requiredBlastList,requiredHmmList,blastOutFile
     for species,clusters in putativeClusters.items():
         for cluster in clusters:
             clusterProts = set(protein for protein in cluster)
-            # first term checks required hits, second term checks extra hits 3rd term checks that there are enough genes for a unique values
-            if (sum(1 for hitID in requiredHitList if len(clusterProts & requiredHitDict[hitID]) >= 1) == numReqHits) \
-                    and (sum(1 for hitID in additionalHitList if len(clusterProts & additionalHitDict[hitID]) >= 1) >= numExtraHitsNeeded)\
-                    and (len(clusterProts) >= totalHitsRequired):
+            requiredHitProts = set()
+            for hitID in requiredHitList:
+                requiredHitProts.update(clusterProts & requiredHitDict[hitID])
+            additionalHitProts = set()
+            for hitID in additionalHitList:
+                additionalHitProts.update(clusterProts & additionalHitDict[hitID])
+            '''
+            First Term: check if there enough protein hits to satisfy the number of required hits
+            Second Term: check if there are enough other hits to satisfy the required number of additional hits
+            Third Term: check that there are enough proteins to populate the list
+            Fourth Term: check that there is at least one hit per required hit in hit list
+            Fifth Term: check that there is enough to satisfy the additional hits
+            '''
+
+            if len(requiredHitProts) >= numReqHits and \
+                len(additionalHitProts) >= numExtraHitsNeeded and \
+                (len(clusterProts) >= totalHitsRequired)  and \
+                (sum(1 for hitID in requiredHitList if len(clusterProts & requiredHitDict[hitID]) >= 1) == numReqHits) and \
+                (sum(1 for hitID in additionalHitList if len(clusterProts & additionalHitDict[hitID]) >= 1) >= numExtraHitsNeeded):
                 filteredClusters[(species,cluster.location[0],cluster.location[1])] = \
                 {hitQuery:[protein.name for protein in (hitSet & clusterProts)] for hitQuery,hitSet in hitDict.items()}
     return filteredClusters
