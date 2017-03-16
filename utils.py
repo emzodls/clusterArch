@@ -403,7 +403,7 @@ def proccessGbks(taskList,outputDir,guiSignal=None):
             for genbank_entry in genbank_entries:
                 clusterNumber = None
                 prot_seqs = []
-                species_id = genbank_entry.id
+                species_id = genbank_entry.name
                 if species_id in speciesList:
                     species_id = species_base + '.entry%.4i' % entry_ctr
                 # check for uniqueness, if there is already an entry on the list insert random number
