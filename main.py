@@ -1894,16 +1894,39 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
     ### Run Permissions Checks
 
     def checkOutputDir(self):
-        if self.saveSearchChk.checkState() == 2 and os.path.isdir(os.path.join(self.outputDir,self.searchName)):
-            buttonReply = QMessageBox.question(self, 'Overwrite Saved Output Directory',
-                                               "The directory where the output will be saved exists.\n"
-                                               "Do you want to overwrite the directory? \n"
-                                               "(Change Search Name to Avoid Overwriting)",
-                                               QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-            if buttonReply == QMessageBox.No:
-                self.searchNameInput.setText('')
+        searchName = self.searchNameInput.text().strip()
+        if self.saveSearchChk.checkState() == 2:
+            if not searchName:
+                msg = QMessageBox.information(self,'Using Default Search Name','No Name Specified Using Default Search Name (clusterTools)',
+                                              QMessageBox.Ok,QMessageBox.Ok)
+                if msg:
+                    self.searchName = 'clusterTools'
+                    if os.path.isdir(os.path.join(self.outputDir, self.searchName)):
+                        buttonReply = QMessageBox.question(self, 'Overwrite Saved Output Directory',
+                                                           "The directory where the output will be saved exists.\n"
+                                                           "Do you want to overwrite the directory? \n"
+                                                           "(Change Search Name to Avoid Overwriting)",
+                                                           QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                        if buttonReply == QMessageBox.No:
+                            self.searchNameInput.setText('')
+                        else:
+                            self.runChecks()
+                    else:
+                        self.runChecks()
             else:
-                self.runChecks()
+                self.searchName = searchName
+                if os.path.isdir(os.path.join(self.outputDir,self.searchName)):
+                    buttonReply = QMessageBox.question(self, 'Overwrite Saved Output Directory',
+                                                       "The directory where the output will be saved exists.\n"
+                                                       "Do you want to overwrite the directory? \n"
+                                                       "(Change Search Name to Avoid Overwriting)",
+                                                       QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                    if buttonReply == QMessageBox.No:
+                        self.searchNameInput.setText('')
+                    else:
+                        self.runChecks()
+                else:
+                    self.runChecks()
         else:
             self.runChecks()
 

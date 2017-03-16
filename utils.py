@@ -122,11 +122,12 @@ def parseSeqFile(SeqFilePath,geneDict):
 
 def parseHMMfile(HMMfilePath,HMMdict):
     hmmsToAdd = [x.strip().split()[-1] for x in open(HMMfilePath) if 'NAME' in x]
+    hmmsAdded = []
     for hmm in hmmsToAdd:
         if hmm not in HMMdict.keys():
             HMMdict[hmm] = HMMfilePath
-
-    return hmmsToAdd,HMMdict
+            hmmsAdded.append(hmm)
+    return hmmsAdded,HMMdict
 
 def MakeBlastDB(makeblastdbExec,dbPath,outputDir,outDBName):
     if platform.system() == 'Windows':
