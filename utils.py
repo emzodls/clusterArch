@@ -82,7 +82,7 @@ def parseSeqFile(SeqFilePath,geneDict):
         cds_ctr = 0
         for genbank_entry in genbank_entries:
             CDS_list = (feature for feature in genbank_entry.features if feature.type == 'CDS')
-            species_id = genbank_entry.id
+            species_id = genbank_entry.name
             for CDS in CDS_list:
                 cds_ctr += 1
                 direction = CDS.location.strand
