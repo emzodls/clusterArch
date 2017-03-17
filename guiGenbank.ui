@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>807</width>
-    <height>873</height>
+    <width>783</width>
+    <height>817</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -39,7 +39,7 @@
        </sizepolicy>
       </property>
       <property name="currentIndex">
-       <number>1</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="prepareDatabase">
        <property name="sizePolicy">
@@ -68,8 +68,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>753</width>
-             <height>666</height>
+             <width>729</width>
+             <height>610</height>
             </rect>
            </property>
            <attribute name="label">
@@ -525,8 +525,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>753</width>
-             <height>544</height>
+             <width>737</width>
+             <height>610</height>
             </rect>
            </property>
            <attribute name="label">
@@ -776,8 +776,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>753</width>
-             <height>544</height>
+             <width>737</width>
+             <height>610</height>
             </rect>
            </property>
            <attribute name="label">
@@ -1363,8 +1363,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>753</width>
-             <height>544</height>
+             <width>737</width>
+             <height>610</height>
             </rect>
            </property>
            <attribute name="label">
@@ -1540,7 +1540,7 @@
        <attribute name="title">
         <string>Run Search</string>
        </attribute>
-       <layout class="QVBoxLayout" name="verticalLayout_8" stretch="0,0,1,0,2,4,0,0,0,0">
+       <layout class="QVBoxLayout" name="verticalLayout_8" stretch="0,0,1,0,1,2,0,0,0,0">
         <item>
          <layout class="QHBoxLayout" name="horizontalLayout">
           <item>
@@ -1715,7 +1715,7 @@
                    </sizepolicy>
                   </property>
                   <property name="text">
-                   <string>Input Gene </string>
+                   <string>Input Seq </string>
                   </property>
                  </widget>
                 </item>
@@ -1728,7 +1728,7 @@
                    </sizepolicy>
                   </property>
                   <property name="text">
-                   <string>View Gene</string>
+                   <string>View Seq</string>
                   </property>
                  </widget>
                 </item>
@@ -1903,7 +1903,7 @@
             <property name="minimumSize">
              <size>
               <width>0</width>
-              <height>200</height>
+              <height>150</height>
              </size>
             </property>
             <property name="sizeAdjustPolicy">
@@ -2139,7 +2139,7 @@
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="tab">
+      <widget class="QWidget" name="loadtab">
        <attribute name="title">
         <string>Load Previous Search</string>
        </attribute>
