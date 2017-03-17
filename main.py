@@ -517,7 +517,7 @@ class resultsWindow(QWidget,resultsWindow.Ui_Results):
         self.gbDlWindowSize.setValidator(posIntValidator)
 
 class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
-    def __init__(self,makeblastdbExec,blastExec,hmmFetchExec,hmmSearchExec,hmmBuildExec,verbose=False):
+    def __init__(self,makeblastdbExec,blastExec,hmmFetchExec,hmmSearchExec,hmmBuildExec,runDir,verbose=False):
 
         super(self.__class__, self).__init__()
         self.setupUi(self)
@@ -611,6 +611,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.hmmFetchExec = hmmFetchExec
         self.hmmSearchExec = hmmSearchExec
         self.hmmBuildExec = hmmBuildExec
+        self.runDir = runDir
         self.verbose = verbose
 
         self.currentGeneSelected = ''
@@ -1516,7 +1517,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             print('Building HMM')
         if runHmmBuild(self.hmmBuildExec,self.buildHmmWin.inFilePath.text(),self.buildHmmWin.outFilePath.text()):
             hmmDB = self.buildHmmWin.outFilePath.text()
-            if runHmmCheck(self.hmmSearchExec,hmmDB):
+            if runHmmCheck(self.hmmSearchExec,self.runDir,hmmDB):
                 hmmsToAdd,self.hmmDict = parseHMMfile(hmmDB,self.hmmDict)
                 for hmm in hmmsToAdd:
                     self.hmmList.addItem(hmm)
@@ -2471,7 +2472,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         ## check if HMM file is valid
         if self.hmmFilePath.text():
             hmmDB = self.hmmFilePath.text()
-            if runHmmCheck(self.hmmSearchExec,hmmDB):
+            if runHmmCheck(self.hmmSearchExec,self.runDir,hmmDB):
                 hmmsToAdd,self.hmmDict = parseHMMfile(hmmDB,self.hmmDict)
                 for hmm in hmmsToAdd:
                     self.hmmList.addItem(hmm)
@@ -2897,7 +2898,7 @@ def main():
     hmmBuildExec = os.path.join(runDir,'hmmbuild')
 
     app = QApplication(sys.argv)
-    form = mainApp(makeblastdbExec,blastExec,hmmFetchExec,hmmSearchExec,hmmBuildExec,verbose=True)
+    form = mainApp(makeblastdbExec,blastExec,hmmFetchExec,hmmSearchExec,hmmBuildExec,runDir,verbose=True)
     form.show()
     app.exec_()
 

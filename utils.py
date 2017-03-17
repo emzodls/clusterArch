@@ -152,10 +152,10 @@ def runBLAST(blastExec,inputFastas,outputDir,searchName,dbPath,eValue='1E-05'):
         print('BLAST failed with retcode %d: %r' % (retcode, err))
     return out,err,retcode
 
-def runHmmCheck(hmmSearchExec,hmmDBase):
+def runHmmCheck(hmmSearchExec,runDir,hmmDBase):
     if platform.system() == 'Windows':
         hmmDBase = get_short_path_name(hmmDBase)
-    command = [hmmSearchExec,hmmDBase,'testHMM.fasta']
+    command = [hmmSearchExec,hmmDBase,os.path.join(runDir,'testHMM.fasta')]
     out,err,retcode = execute(command)
     if retcode != 0:
         print(out,err,retcode)
