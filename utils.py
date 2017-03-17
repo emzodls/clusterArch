@@ -53,7 +53,7 @@ if platform.system() == 'Windows':
                 output_buf_size = needed
 ###########################################
 
-def execute(commands, input=None,shell=False):
+def execute(commands, input=None):
     "Execute commands in a system-independent manner"
 
     if input is not None:
@@ -64,7 +64,7 @@ def execute(commands, input=None,shell=False):
     try:
         proc = subprocess.Popen(commands, stdin=stdin_redir,
                                 stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE,shell=False)
+                                stderr=subprocess.PIPE,env=os.getcwd())
         out, err = proc.communicate(input=input)
         retcode = proc.returncode
         return out, err, retcode
@@ -171,7 +171,7 @@ def runHmmBuild(hmmBuildExec,inFile,outFile):
     command = [hmmBuildExec,'-n',hmmName,outFile,inFile]
     if platform.system() == 'Windows':
         print(platform.system())
-        out,err,retcode = execute(command,shell=True)
+        out,err,retcode = execute(command)
     else:
         out, err, retcode = execute(command)
     if retcode != 0:
