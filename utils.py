@@ -60,11 +60,11 @@ def execute(commands, input=None):
         stdin_redir = subprocess.PIPE
     else:
         stdin_redir = None
-
+    print(os.getcwd())
     try:
         proc = subprocess.Popen(commands, stdin=stdin_redir,
                                 stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE,env=os.getcwd())
+                                stderr=subprocess.PIPE)
         out, err = proc.communicate(input=input)
         retcode = proc.returncode
         return out, err, retcode
