@@ -158,6 +158,7 @@ def runHmmCheck(hmmSearchExec,hmmDBase):
     command = [hmmSearchExec,hmmDBase,'testHMM.fasta']
     out,err,retcode = execute(command)
     if retcode != 0:
+        print(out,err,retcode)
         return False
     else:
         return True
