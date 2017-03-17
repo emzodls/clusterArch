@@ -21,7 +21,7 @@
     along with clusterTools.  If not, see <http://www.gnu.org/licenses/>.
 '''
 
-import os,csv,urllib,gzip,sys
+import os,csv,urllib,gzip,sys,platform
 from PyQt5.QtCore import (QRegularExpression,
         Qt,QCoreApplication,QThread,pyqtSignal,pyqtSlot,QObject)
 from PyQt5 import QtGui
@@ -2866,12 +2866,35 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 self.processSearchListWorker.start.emit()
 
 def main():
+    if platform.system() == 'Windows':
+        import ctypes
+        from ctypes import wintypes
+        _GetShortPathNameW = ctypes.windll.kernel32.GetShortPathNameW
+        _GetShortPathNameW.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD]
+        _GetShortPathNameW.restype = wintypes.DWORD
 
-    hmmFetchExec = os.path.join(sys.path[0],'hmmfetch')
-    makeblastdbExec = os.path.join(sys.path[0],'makeblastdb')
-    blastExec = os.path.join(sys.path[0],'blastp')
-    hmmSearchExec = os.path.join(sys.path[0],'hmmsearch')
-    hmmBuildExec = os.path.join(sys.path[0],'hmmbuild')
+        def get_short_path_name(long_name):
+            """
+            Gets the short path name of a given long path.
+            http://stackoverflow.com/a/23598461/200291
+            """
+            output_buf_size = 0
+            while True:
+                output_buf = ctypes.create_unicode_buffer(output_buf_size)
+                needed = _GetShortPathNameW(long_name, output_buf, output_buf_size)
+                if output_buf_size >= needed:
+                    return output_buf.value
+                else:
+                    output_buf_size = needed
+        runDir = get_short_path_name(sys.path[0])
+    else:
+        runDir = sys.path[0]
+
+    hmmFetchExec = os.path.join(runDir,'hmmfetch')
+    makeblastdbExec = os.path.join(runDir,'makeblastdb')
+    blastExec = os.path.join(runDir,'blastp')
+    hmmSearchExec = os.path.join(runDir,'hmmsearch')
+    hmmBuildExec = os.path.join(runDir,'hmmbuild')
 
     app = QApplication(sys.argv)
     form = mainApp(makeblastdbExec,blastExec,hmmFetchExec,hmmSearchExec,hmmBuildExec,verbose=True)

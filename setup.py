@@ -9,9 +9,9 @@ from cx_Freeze import setup, Executable
 base = None
 if sys.platform == "win32":
     base = "Win32GUI"
-    includefiles = glob('winDeps/*')
+    includefiles = glob('winDeps/*') + 'testHMM.fasta'
 if sys.platform == "darwin":
-    includefiles = glob('macDeps/*')
+    includefiles = glob('macDeps/*') + 'testHMM.fasta'
 
 # Dependencies are automatically detected, but it might need fine tuning.
 build_exe_options = {"packages": [],
