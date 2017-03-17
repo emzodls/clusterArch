@@ -60,7 +60,7 @@ def execute(commands, input=None):
         stdin_redir = subprocess.PIPE
     else:
         stdin_redir = None
-    print(os.getcwd())
+    print(commands)
     try:
         proc = subprocess.Popen(commands, stdin=stdin_redir,
                                 stdout=subprocess.PIPE,

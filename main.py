@@ -21,7 +21,7 @@
     along with clusterTools.  If not, see <http://www.gnu.org/licenses/>.
 '''
 
-import os,csv,urllib,gzip
+import os,csv,urllib,gzip,sys
 from PyQt5.QtCore import (QRegularExpression,
         Qt,QCoreApplication,QThread,pyqtSignal,pyqtSlot,QObject)
 from PyQt5 import QtGui
@@ -2867,11 +2867,11 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
 
 def main():
 
-    hmmFetchExec = 'hmmfetch'
-    makeblastdbExec = 'makeblastdb'
-    blastExec = 'blastp'
-    hmmSearchExec = 'hmmsearch'
-    hmmBuildExec = 'hmmbuild'
+    hmmFetchExec = os.path.join(sys.path[0],'hmmfetch')
+    makeblastdbExec = os.path.join(sys.path[0],'makeblastdb')
+    blastExec = os.path.join(sys.path[0],'blastp')
+    hmmSearchExec = os.path.join(sys.path[0],'hmmsearch')
+    hmmBuildExec = os.path.join(sys.path[0],'hmmbuild')
 
     app = QApplication(sys.argv)
     form = mainApp(makeblastdbExec,blastExec,hmmFetchExec,hmmSearchExec,hmmBuildExec,verbose=True)
