@@ -65,10 +65,8 @@ def ncbiFetch(idList,outputFolder,chunkSize = 100,batchMode=True,ncbiDict={},gui
     if batchMode:
         idChunks = [idList[x:x+chunkSize] for x in range(0,len(idList),chunkSize)]
         for dataChunk in idChunks:
-            print(dataChunk)
             fetchURL = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db={}&id={}" \
                        "&retmode=text&rettype=gbwithparts&retmax=251&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(db,','.join(str(gi) for gi in dataChunk))
-            print(fetchURL)
             ## from Eli Korvigo in biostars (https://www.biostars.org/p/66921/) modified because i'm using urllib
             def extract_records(records_handle):
                 buffer = []
@@ -128,7 +126,6 @@ def accToFasta(accList,db,outputfolder):
                 line = line.decode("utf-8", "ignore")
                 if line.startswith(">") and buffer:
                     # yield accession number and record
-                    print(buffer)
                     currentAcc = buffer[0].split()[0][1:].split('.')[0]
                     yield currentAcc, "".join(buffer)
                     buffer = [line]

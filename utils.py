@@ -60,7 +60,6 @@ def execute(commands, input=None):
         stdin_redir = subprocess.PIPE
     else:
         stdin_redir = None
-    print(commands)
     try:
         proc = subprocess.Popen(commands, stdin=stdin_redir,
                                 stdout=subprocess.PIPE,
@@ -516,8 +515,6 @@ def ncbiGenomeFastaParser(fastaHandle):
             if id and sequence:
                 dnaSeq = Seq(sequence,generic_dna)
                 proteinSeq = dnaSeq.translate()
-                if '*' in proteinSeq[:-1]:
-                    print(id,proteinSeq)
                 fastaDict[id] = dnaSeq.translate()
             sequence = ''
             lineParse = line.split()

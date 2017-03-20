@@ -12,7 +12,8 @@ if sys.platform == "win32":
     includefiles = glob('winDeps/*') + ['testHMM.fasta']
 if sys.platform == "darwin":
     includefiles = glob('macDeps/*') + ['testHMM.fasta']
-
+if sys.platform == "linux":
+    includefiles = glob('linuxDeps/*') + ['testHMM.fasta']
 # Dependencies are automatically detected, but it might need fine tuning.
 build_exe_options = {"packages": [],
                      "excludes": ["tkinter","BioSQL","Bio.PDB","Bio.Nexus","Bio.SwissProt","BioSQL.BioSeq","Bio.AlignIO"],

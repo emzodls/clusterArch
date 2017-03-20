@@ -1221,7 +1221,10 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         if dirTarget:
             dirpath,dirName = os.path.split(dirTarget)
             if os.access(dirpath, os.W_OK):
-               self.ncbiGenomeDlDir.setText(dirTarget)
+                if not dirName.endswith('.clusterToolDB.fasta'):
+                    self.ncbiGenomeDlDir.setText(dirTarget+'.clusterToolDB.fasta')
+                else:
+                    self.ncbiGenomeDlDir.setText(dirTarget)
             else:
                 msg = QMessageBox()
                 msg.setIcon(QMessageBox.Critical)
@@ -2598,7 +2601,6 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                     hmmCheck = False
 
                 if hmmCheck and blastCheck:
-                    print('done checks')
                     #### reinitialize savedSearch
                     self.maxEvals['blastEval'] = float(self.SavedResultSummary['blastEval'])
                     self.maxEvals['hmmEval'] = float(self.SavedResultSummary['hmmEval'])

@@ -11,7 +11,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_clusterArch(object):
     def setupUi(self, clusterArch):
         clusterArch.setObjectName("clusterArch")
-
+        clusterArch.resize(650, 700)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
@@ -299,7 +299,7 @@ class Ui_clusterArch(object):
         self.verticalLayout_10.addLayout(self.horizontalLayout_16)
         self.toolBox.addItem(self.ncbiDL, "")
         self.ncbiDiv = QtWidgets.QWidget()
-        self.ncbiDiv.setGeometry(QtCore.QRect(0, 0, 737, 610))
+        self.ncbiDiv.setGeometry(QtCore.QRect(0, 0, 710, 289))
         self.ncbiDiv.setObjectName("ncbiDiv")
         self.verticalLayout_12 = QtWidgets.QVBoxLayout(self.ncbiDiv)
         self.verticalLayout_12.setContentsMargins(0, 0, 0, 0)
@@ -421,7 +421,7 @@ class Ui_clusterArch(object):
         self.verticalLayout_12.addItem(spacerItem)
         self.toolBox.addItem(self.ncbiDiv, "")
         self.genomesDB = QtWidgets.QWidget()
-        self.genomesDB.setGeometry(QtCore.QRect(0, 0, 737, 610))
+        self.genomesDB.setGeometry(QtCore.QRect(0, 0, 499, 494))
         self.genomesDB.setObjectName("genomesDB")
         self.verticalLayout_14 = QtWidgets.QVBoxLayout(self.genomesDB)
         self.verticalLayout_14.setContentsMargins(0, 0, 0, 0)
@@ -697,7 +697,7 @@ class Ui_clusterArch(object):
         self.verticalLayout_14.addWidget(self.keepGenomeFastas, 0, QtCore.Qt.AlignRight)
         self.toolBox.addItem(self.genomesDB, "")
         self.filesDB = QtWidgets.QWidget()
-        self.filesDB.setGeometry(QtCore.QRect(0, 0, 737, 610))
+        self.filesDB.setGeometry(QtCore.QRect(0, 0, 521, 259))
         self.filesDB.setObjectName("filesDB")
         self.verticalLayout = QtWidgets.QVBoxLayout(self.filesDB)
         self.verticalLayout.setContentsMargins(0, 0, 0, 0)
@@ -1302,6 +1302,11 @@ class Ui_clusterArch(object):
         self.horizontalLayout_37.addWidget(self.savedRemoveSearchTermBtn)
         spacerItem5 = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
         self.horizontalLayout_37.addItem(spacerItem5)
+        self.line_4 = QtWidgets.QFrame(self.loadtab)
+        self.line_4.setFrameShape(QtWidgets.QFrame.VLine)
+        self.line_4.setFrameShadow(QtWidgets.QFrame.Sunken)
+        self.line_4.setObjectName("line_4")
+        self.horizontalLayout_37.addWidget(self.line_4)
         self.label_38 = QtWidgets.QLabel(self.loadtab)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Preferred)
         sizePolicy.setHorizontalStretch(0)
@@ -1414,7 +1419,6 @@ class Ui_clusterArch(object):
         clusterArch.setTabOrder(self.downloadGbDivFileBtn, self.minLength)
         clusterArch.setTabOrder(self.minLength, self.maxLength)
         clusterArch.setTabOrder(self.maxLength, self.numEntries)
-        clusterArch.resize(783, 817)
 
     def retranslateUi(self, clusterArch):
         _translate = QtCore.QCoreApplication.translate

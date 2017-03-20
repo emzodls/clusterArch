@@ -525,8 +525,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>737</width>
-             <height>610</height>
+             <width>710</width>
+             <height>289</height>
             </rect>
            </property>
            <attribute name="label">
@@ -776,8 +776,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>737</width>
-             <height>610</height>
+             <width>499</width>
+             <height>494</height>
             </rect>
            </property>
            <attribute name="label">
@@ -1363,8 +1363,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>737</width>
-             <height>610</height>
+             <width>521</width>
+             <height>259</height>
             </rect>
            </property>
            <attribute name="label">
@@ -2393,6 +2393,13 @@
                </size>
               </property>
              </spacer>
+            </item>
+            <item>
+             <widget class="Line" name="line_4">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
+              </property>
+             </widget>
             </item>
             <item alignment="Qt::AlignRight">
              <widget class="QLabel" name="label_38">
