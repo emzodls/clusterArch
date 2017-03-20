@@ -648,7 +648,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
 
         self.runSearch.clicked.connect(self.checkOutputDir)
 
-        self.closeBtn.clicked.connect(QCoreApplication.instance().quit)
+        self.closeBtn.clicked.connect(self.close)
 
         self.dataBaseSelector.currentIndexChanged.connect(self.databaseFunction)
         self.outputDirectorySelector.currentIndexChanged.connect(self.outdirFunction)
@@ -2865,6 +2865,31 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 self.processSearchListWorker.moveToThread(self.runnerThread)
                 self.processSearchListWorker.start.connect(self.processSearchListWorker.run)
                 self.processSearchListWorker.start.emit()
+    def closeEvent(self, QCloseEvent):
+        quit_msg = "Are you sure you want to exit the program?"
+        reply = QMessageBox.question(self, 'Message',
+                                           quit_msg, QMessageBox.Yes, QMessageBox.No)
+
+        if reply == QMessageBox.Yes:
+            self.cleanFiles()
+            QCloseEvent.accept()
+        else:
+            QCloseEvent.ignore()
+    def cleanFiles(self):
+        foldersToCheck = [self.outputDirectorySelector.itemText(idx) for idx in range(self.outputDirectorySelector.count())
+                          if 'Select Directory...' not in self.outputDirectorySelector.itemText(idx)]
+        filesToDelete = []
+        extensionsToCheck = ['*_blast_results.out','*_gene_queries.fa','*_hmmDB.hmm','*_hmmSearch.out']
+        for folder in foldersToCheck:
+            for extension in extensionsToCheck:
+                filesToDelete.extend(glob(os.path.join(folder,extension)))
+        if self.verbose:
+            print(foldersToCheck)
+            print(filesToDelete)
+        for tmpFile in filesToDelete:
+            if os.path.isfile(tmpFile):
+                os.remove(tmpFile)
+
 
 def main():
     if platform.system() == 'Windows':
@@ -2898,7 +2923,7 @@ def main():
     hmmBuildExec = os.path.join(runDir,'hmmbuild')
 
     app = QApplication(sys.argv)
-    form = mainApp(makeblastdbExec,blastExec,hmmFetchExec,hmmSearchExec,hmmBuildExec,runDir,verbose=True)
+    form = mainApp(makeblastdbExec,blastExec,hmmFetchExec,hmmSearchExec,hmmBuildExec,runDir)
     form.show()
     app.exec_()
 
