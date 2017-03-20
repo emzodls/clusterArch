@@ -24,4 +24,4 @@ setup(  name = "clusterTools",
         version = "0.1",
         description = "BGC cluster analysis",
         options = {"build_exe": build_exe_options},
-        executables = [Executable("main.py", base=base)])
+        executables = [Executable("main.py", base=base,icon='icon.ico')])
