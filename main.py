@@ -522,6 +522,9 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         super(self.__class__, self).__init__()
         self.setupUi(self)
 
+        if sys.platform == 'win32':
+            # build HMM not working in windows right now
+            self.buildHMMBtn.setVisible(False)
         ##### Set up NCBI File Interface
         self.ncbiDict = dict()
         self.acc2gi = dict()
@@ -2869,7 +2872,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 self.processSearchListWorker.start.emit()
     def closeEvent(self, QCloseEvent):
         quit_msg = "Are you sure you want to exit the program?"
-        reply = QMessageBox.question(self, 'Message',
+        reply = QMessageBox.question(self, 'Really Quit?',
                                            quit_msg, QMessageBox.Yes, QMessageBox.No)
 
         if reply == QMessageBox.Yes:
