@@ -522,9 +522,9 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         super(self.__class__, self).__init__()
         self.setupUi(self)
 
-        if sys.platform == 'win32':
+        #if sys.platform == 'win32':
             # build HMM not working in windows right now
-            self.buildHMMBtn.setVisible(False)
+         #   self.buildHMMBtn.setVisible(False)
         ##### Set up NCBI File Interface
         self.ncbiDict = dict()
         self.acc2gi = dict()
@@ -1492,10 +1492,10 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.buildHmmWin.show()
 
     def setBuildHmmInFile(self):
-        if sys.platform == 'win32':
-            fileName, _ = QFileDialog.getOpenFileName(self,filter='MSA Files(*.sto)')
-        else:
-            fileName, _ = QFileDialog.getOpenFileName(self, filter='MSA Files (*.sto *.fa *.fasta)')
+        # if sys.platform == 'win32':
+        #     fileName, _ = QFileDialog.getOpenFileName(self,filter='MSA Files(*.sto)')
+        # else:
+        fileName, _ = QFileDialog.getOpenFileName(self, filter='MSA Files (*.sto *.fa *.fasta)')
         if self.verbose:
             print(fileName)
         if fileName:

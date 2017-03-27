@@ -385,7 +385,7 @@ def processGbkDivFile(gbkDivFile,database,guiSignal=None):
             guiSignal.emit('Failed')
         raise Exception
 
-def proccessGbks(taskList,outputDir,guiSignal=None):
+def proccessGbks(taskList,outputDir,commonName=False,guiSignal=None):
     # make sure species list is unique
     speciesList = set()
     failedToProcess = []
@@ -447,7 +447,9 @@ def proccessGbks(taskList,outputDir,guiSignal=None):
                     gene_end = max(0, CDS.location.nofuzzy_end)
 
                     # Try to find a common name for the promoter, otherwise just use the internal ID
-                    if 'protein_id' in CDS.qualifiers.keys():
+                    if commonName and 'gene' in CDS.qualifiers.keys():
+                        protein_id = CDS.qualifiers['gene'][0]
+                    elif 'protein_id' in CDS.qualifiers.keys():
                         protein_id = CDS.qualifiers['protein_id'][0]
                     elif 'locus_tag' in CDS.qualifiers.keys():
                         protein_id = CDS.qualifiers['locus_tag'][0]
