@@ -1334,7 +1334,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
     def showEditGeneWin(self):
         if self.geneList.currentItem():
             self.editGeneWin = addGeneWindow()
-            self.editGeneWin.setWindowModality(Qt.WindowModal)
+            self.editGeneWin.setWindowModality(Qt.ApplicationModal)
             geneToEdit = self.geneList.currentItem().text()
             seqToEdit = self.geneDict[geneToEdit]
             self.editGeneWin.geneSequence.setText(seqToEdit)
@@ -1387,7 +1387,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
 
     def showAddGeneWin(self):
         self.addGeneWin = addGeneWindow()
-        self.addGeneWin.setWindowModality(Qt.WindowModal)
+        self.addGeneWin.setWindowModality(Qt.ApplicationModal)
         self.addGeneWin.addGeneBtn.clicked.connect(self.addGeneSeq)
         self.addGeneWin.show()
 
@@ -1484,7 +1484,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
 ############ HMM Maker ########################
     def openBuildHmmWin(self):
         self.buildHmmWin = buildHmmWin()
-        self.buildHmmWin.setWindowModality(Qt.WindowModal)
+        self.buildHmmWin.setWindowModality(Qt.ApplicationModal)
 
         self.buildHmmWin.selectInFileBtn.clicked.connect(self.setBuildHmmInFile)
         self.buildHmmWin.selectOutfileBtn.clicked.connect(self.setBuildHmmOutFile)
@@ -1505,10 +1505,10 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         usrInput, _ = QFileDialog.getSaveFileName(self, filter='HMM File(*.hmm)')
         if usrInput:
             dirName,fileName = os.path.split(usrInput)
-            if not fileName.endswith('.hmm'):
-                fileName += '.hmm'
+            if not usrInput.endswith('.hmm'):
+                usrInput += '.hmm'
             if dirName and os.access(dirName, os.W_OK):
-                self.buildHmmWin.outFilePath.setText(os.path.join(dirName,fileName))
+                self.buildHmmWin.outFilePath.setText(usrInput)
             else:
                 msg = QMessageBox()
                 msg.setIcon(QMessageBox.Critical)
