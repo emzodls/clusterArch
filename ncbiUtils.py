@@ -275,7 +275,52 @@ def fetchGbksWithAcc(clusterList,window,outputFolder,guiSignal=None):
             summaryFile.write('{},{},{}\n'.format(fileNameAcc, gi,summary))
     return dlList
 
+def protToFasta(proteinList,outfile):
+    protID2Acc = dict()
+    acc2ProtID = dict()
+    acc2gi = dict()
+    failedToFetch = list()
+    success = list()
+    for protein in proteinList:
+        acc = protein.name.split('.')[0]
+        proteinID = protein.fastaID
+        esearchURL = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=protein&term={}[accn]" \
+                     "&retmode=text&retmax=10&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(acc)
+        try:
+            ncbiRequest = urllib.request.urlopen(esearchURL)
+            parseRequest = etree.parse(ncbiRequest)
+            ncbiID = [idElem.text for idElem in parseRequest.iter('Id')][0]
+            acc2gi[acc] = ncbiID
+            protID2Acc[proteinID] = acc
+            acc2ProtID[acc] = proteinID
+            success.append(acc)
+        except:
+            print("Error Connecting to NCBI Server for acc {}".format(acc))
+            failedToFetch.append(acc)
+            pass
+    idList = list(acc2gi.values())
+    idChunks = [idList[x:x + 100] for x in range(0, len(acc2gi), 100)]
+    if os.path.isfile(outfile):
+        os.remove(outfile)
 
+    for dataChunk in idChunks:
+        fetchURL = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=protein&id={}" \
+                   "&retmode=text&rettype=fasta&retmax=251&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(','.join(str(gi) for gi in dataChunk))
+        def extract_records(records_handle):
+            buffer = []
+            for line in records_handle:
+                line = line.decode("utf-8", "ignore")
+                if line:
+                    if line.startswith(">"):
+                        accID = line.split()[0][1:].split('.')[0]
+
+                        buffer.append('>{}\n'.format(acc2ProtID[accID]))
+                    else:
+                        buffer.append(line)
+            return "".join(buffer)
+        fetchReq = urllib.request.urlopen(fetchURL)
+        with open(outfile, 'a') as output:
+            output.write(extract_records(fetchReq))
 
 if __name__ == '__main__':
     clusterList = []
