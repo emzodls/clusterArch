@@ -21,13 +21,13 @@
     along with clusterTools.  If not, see <http://www.gnu.org/licenses/>.
 '''
 
-import os,csv,urllib,gzip,sys,platform
+import os,csv,urllib,gzip,platform
 from PyQt5.QtCore import (QRegularExpression,
-        Qt,QCoreApplication,QThread,pyqtSignal,pyqtSlot,QObject)
+        Qt,QThread,pyqtSignal,pyqtSlot,QObject)
 from PyQt5 import QtGui
 from PyQt5.QtWidgets import (QApplication, QFileDialog, QMainWindow,
-        QMessageBox,QCheckBox,QTableWidgetItem,QWidget,QListWidgetItem)
-from utils import parseSeqFile,parseHMMfile,generateInputFasta,generateHMMdb,MakeBlastDB,runBLAST,\
+        QMessageBox,QTableWidgetItem,QWidget,QListWidgetItem)
+from utils import parseSeqFile,parseHMMfile,generateInputFasta,generateHMMdb,MakeBlastDB,runBLAST,runBLASTself,\
     runHmmsearch,proccessGbks,processSearchListOptionalHits,humanbytes,processGbkDivFile,\
     ncbiGenomeFastaParser,fastaDictToSeqRecs,writeSeqRecs,runHmmCheck,runHmmBuild
 from collections import Counter
@@ -352,7 +352,20 @@ class runBlastWorker(QObject):
             else:
                 self.dbCreated.emit(True)
         ### Run Blastp
-        inputFastas = os.path.join(self.outputDir,'{}_gene_queries.fa'.format(self.searchName))
+        inputName = '{}_gene_queries.fa'.format(self.searchName)
+        inputFastas = os.path.join(self.outputDir,inputName)
+        ### make an input BLAST database for self-blast
+        out, err, retcode = MakeBlastDB(self.makeblastdbExec, inputFastas, self.outputDir, inputName)
+
+        if retcode != 0:
+            self.doneBLAST.emit(False)
+            return
+        ## self blast
+        out, err, retcode = runBLASTself(self.blastpExec, inputFastas, self.outputDir,
+                                     eValue=str(self.blastEval))
+        if retcode != 0:
+            self.doneBLAST.emit(False)
+            return
 
         if dbInOutputFolder:
             out, err, retcode = runBLAST(self.blastpExec, inputFastas, self.outputDir,self.searchName,
@@ -1757,21 +1770,24 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         #self.checkSuccessful = False
         self.resultsWin = resultsWindow()
 
-        self.resultsWin.resultsList.setColumnCount(5 + len(blastList) + len(hmmList))
+        self.resultsWin.resultsList.setColumnCount(6 + len(blastList) + len(hmmList))
         self.resultsWin.resultsList.setHorizontalHeaderItem(0, QTableWidgetItem(""))
         self.resultsWin.resultsList.setHorizontalHeaderItem(1, QTableWidgetItem("Species/Accession ID"))
         self.resultsWin.resultsList.setHorizontalHeaderItem(2, QTableWidgetItem("Start"))
         self.resultsWin.resultsList.setHorizontalHeaderItem(3, QTableWidgetItem("End"))
         self.resultsWin.resultsList.setHorizontalHeaderItem(4, QTableWidgetItem("Size"))
+        self.resultsWin.resultsList.setHorizontalHeaderItem(5, QTableWidgetItem('BLAST Similarity Score'))
         for idx, blastHit in enumerate(blastList):
             if self.verbose:
                 print(idx, blastHit)
-            self.resultsWin.resultsList.setHorizontalHeaderItem(idx + 5, QTableWidgetItem(blastHit))
+            self.resultsWin.resultsList.setHorizontalHeaderItem(idx + 6, QTableWidgetItem(blastHit))
         for idx, hmmHit in enumerate(hmmList):
             if self.verbose: print(idx,' and '.join(hmmHit))
-            self.resultsWin.resultsList.setHorizontalHeaderItem(idx + len(blastList) + 5,
+            self.resultsWin.resultsList.setHorizontalHeaderItem(idx + len(blastList) +6,
                                                           QTableWidgetItem(' and '.join(hmmHit)))
+
         for cluster, hitDict in filteredClusters.items():
+            blastScore = 0
             currentRowCount = self.resultsWin.resultsList.rowCount()
             self.resultsWin.resultsList.insertRow(currentRowCount)
             checkbox = QTableWidgetItem()
@@ -1783,17 +1799,27 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             self.resultsWin.resultsList.setItem(currentRowCount, 3, QTableWidgetItem(str(cluster[2])))
             self.resultsWin.resultsList.setItem(currentRowCount, 4, QTableWidgetItem(str(cluster[2]-cluster[1]+1)))
             for idx, blastHit in enumerate(blastList):
-                self.resultsWin.resultsList.setItem(currentRowCount, idx + 5,
-                                              QTableWidgetItem('; '.join(filteredClusters[cluster].get(blastHit,''))))
+                hitList = hitDict.get(blastHit,[])
+                sortedList = sorted(hitList,key=lambda x: x[1],reverse=True)
+                if sortedList:
+                    blastScore += sortedList[0][1]
+                self.resultsWin.resultsList.setItem(currentRowCount, idx + 6,
+                                    QTableWidgetItem('; '.join(hit[0] for hit in sortedList)))
             for idx, hmmHit in enumerate(hmmList):
-                self.resultsWin.resultsList.setItem(currentRowCount, idx + len(blastList) + 5,
-                                              QTableWidgetItem('; '.join(filteredClusters[cluster].get(hmmHit,''))))
-
+                self.resultsWin.resultsList.setItem(currentRowCount, idx + len(blastList) + 6,
+                                              QTableWidgetItem('; '.join(hit[0] for hit in sortedList)))
+            self.resultsWin.resultsList.setItem(currentRowCount,5,
+                                                QTableWidgetItem('{0:.4f}'.format(blastScore)))
         self.resultsWin.resultsList.resizeColumnsToContents()
+        self.resultsWin.selectAllBtn.clicked.connect(self.selectAllResults)
         self.resultsWin.exportSummaryResultsBtn.clicked.connect(self.exportResultsSummary)
         self.resultsWin.selectGbkExportDirBtn.clicked.connect(self.selectGbkExportDir)
         self.resultsWin.exportSelectedGbkBtn.clicked.connect(self.exportSelectedGbk)
         self.resultsWin.show()
+
+    def selectAllResults(self):
+        for idx in range(self.resultsWin.resultsList.rowCount()):
+            self.resultsWin.resultsList.item(idx, 0).setCheckState(2)
 
     def exportSelectedGbk(self):
         gbksToExport = []

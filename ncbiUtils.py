@@ -237,6 +237,7 @@ def fetchGbksWithAcc(clusterList,window,outputFolder,guiSignal=None):
                 ncbiRequest = urllib.request.urlopen(esearchURL)
                 parseRequest = etree.parse(ncbiRequest)
                 ncbiID = [idElem.text for idElem in parseRequest.iter('Id')][0]
+                print(ncbiID)
                 acc2ncbi[acc] = ncbiID
             else:
                 ncbiID = acc2ncbi[acc]
@@ -260,7 +261,8 @@ def fetchGbksWithAcc(clusterList,window,outputFolder,guiSignal=None):
             if guiSignal:
                 guiSignal.emit((acc,ncbiID,summary))
             dlList.add((acc,ncbiID,summary))
-        except:
+        except Exception as e:
+            print(e)
             if guiSignal:
                 guiSignal.emit((acc,None,None))
             dlList.add((acc,None,None))
@@ -275,24 +277,3 @@ def fetchGbksWithAcc(clusterList,window,outputFolder,guiSignal=None):
             summaryFile.write('{},{},{}\n'.format(fileNameAcc, gi,summary))
     return dlList
 
-
-
-if __name__ == '__main__':
-    clusterList = []
-    #
-    # for line in open('/Volumes/Data/lola_AS3/antimycin_ozmN/hits_genomesGB.csv'):
-    #     if '##' in line:
-    #         pass
-    #     else:
-    #         lineParse = line.split(',')
-    #         clusterList.append((lineParse[0],(int(lineParse[1]),int(lineParse[2]))))
-    # print(clusterList)
-    clusterList = [('EF552687', (20505, 87657)), ('CP006871', (6578021, 6611567)), ('CP006871', (1405296, 1502258)), ('CP006871', (9179933, 9267062)), ('CP007574', (6209940, 6264994)), ('CP000249', (2320878, 2324816))]
-
-    test = fetchGbksWithAcc(clusterList[:10], 100000, '/Volumes/Data/lola_AS3/antimycin_ozmN/testDL', guiSignal=None)
-    print(test)
-    # names,sizes = zip(*getGbkDlList('ENV'))
-    # print(names,sum(sizes))
-    #print(sum(x[1] for x in test))
-    # dl = wget.download('ftp://ftp.ncbi.nlm.nih.gov/genbank/{}'.format(test[2][0]),test[0][0])
-   # print(dl)

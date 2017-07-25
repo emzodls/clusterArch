@@ -138,14 +138,25 @@ def MakeBlastDB(makeblastdbExec,dbPath,outputDir,outDBName):
         print('makeblastDB failed with retcode %d: %r' % (retcode, err))
     return out,err,retcode
 
+def runBLASTself(blastExec,inputFastas,outputDir,eValue='1E-05'):
+    if platform.system() == 'Windows':
+        inputFastas = get_short_path_name(inputFastas)
+        outputDir = get_short_path_name(outputDir)
+    command = [blastExec, "-db", inputFastas, "-query", inputFastas, "-outfmt", "6", "-max_target_seqs", "10000", "-max_hsps", '1',
+               "-evalue", eValue, "-out", os.path.join(outputDir,"self_blast_results.out")]
+    out, err, retcode = execute(command)
+    if retcode != 0:
+        print('BLAST failed with retcode %d: %r' % (retcode, err))
+    return out,err,retcode
+
 def runBLAST(blastExec,inputFastas,outputDir,searchName,dbPath,eValue='1E-05'):
     if platform.system() == 'Windows':
         path, outputDBname = os.path.split(dbPath)
         dbPath = os.path.join(get_short_path_name(path),outputDBname)
         inputFastas = get_short_path_name(inputFastas)
         outputDir = get_short_path_name(outputDir)
-    command = [blastExec, "-db", dbPath, "-query", inputFastas, "-outfmt", "6", "-max_target_seqs", "10000", "-evalue",
-               eValue, "-out", os.path.join(outputDir,"{}_blast_results.out".format(searchName))]
+    command = [blastExec, "-db", dbPath, "-query", inputFastas, "-outfmt", "6", "-max_target_seqs", "10000", "-max_hsps", '1',
+               "-evalue", eValue, "-out", os.path.join(outputDir,"{}_blast_results.out".format(searchName))]
     out, err, retcode = execute(command)
     if retcode != 0:
         print('BLAST failed with retcode %d: %r' % (retcode, err))
@@ -220,6 +231,19 @@ def generateHMMdb(hmmFetchExec,hmmDict,hmmSet,outputDir,searchName):
                 failedToFetch.add(hmm)
     return errFlag,failedToFetch
 
+def processSelfBlastScore(blastOutFile):
+    scoreDict = dict()
+    with open(blastOutFile) as blast_handle:
+        for line in blast_handle:
+            try:
+                line_parse = line.split('\t')
+                if line_parse[0] == line_parse[1]:
+                    scoreDict[line_parse[0]] = float(line_parse[11])
+            except (ValueError,IndexError):
+                pass
+    return scoreDict
+
+
 def processSearchListOptionalHits(requiredBlastList,requiredHmmList,blastOutFile,blastEval,hmmOutFile,hmmScore, hmmDomLen,windowSize,
                                   totalHitsRequired,additionalBlastList=[],additionalHmmList=[]):
     # Gather all of the proteins, might be a memory issue...code memory friendly version with sequential filters (?)
@@ -234,6 +258,8 @@ def processSearchListOptionalHits(requiredBlastList,requiredHmmList,blastOutFile
 
     additionalBlastHitDict = dict()
     additionalHmmHitDict = dict()
+    outputDir, blastFile = os.path.split(blastOutFile)
+    selfScoreDict = processSelfBlastScore(os.path.join(outputDir,'self_blast_results.out'))
 
     if requiredBlastList:
         requiredBlastHitDict = {hitName:set(protein for protein in prots.values() if hitName in protein.hit_dict['blast'].hits)
@@ -263,11 +289,9 @@ def processSearchListOptionalHits(requiredBlastList,requiredHmmList,blastOutFile
     hitProteins.update(*additionalHitDict.values())
 
     putativeClusters = clusterAnalysis.clusterProteins(hitProteins,windowSize)
-
     assert totalHitsRequired >= numReqHits
 
     numExtraHitsNeeded = totalHitsRequired - numReqHits
-
     filteredClusters = dict()
     for species,clusters in putativeClusters.items():
         for cluster in clusters:
@@ -285,14 +309,22 @@ def processSearchListOptionalHits(requiredBlastList,requiredHmmList,blastOutFile
             Fourth Term: check that there is at least one hit per required hit in hit list
             Fifth Term: check that there is enough to satisfy the additional hits
             '''
-
             if len(requiredHitProts) >= numReqHits and \
                 len(additionalHitProts) >= numExtraHitsNeeded and \
                 (len(clusterProts) >= totalHitsRequired)  and \
                 (sum(1 for hitID in requiredHitList if len(clusterProts & requiredHitDict[hitID]) >= 1) == numReqHits) and \
                 (sum(1 for hitID in additionalHitList if len(clusterProts & additionalHitDict[hitID]) >= 1) >= numExtraHitsNeeded):
-                filteredClusters[(species,cluster.location[0],cluster.location[1])] = \
-                {hitQuery:[protein.name for protein in (hitSet & clusterProts)] for hitQuery,hitSet in hitDict.items()}
+                filteredClusters[(species,cluster.location[0],cluster.location[1])] = dict()
+                for hitQuery,hitSet in hitDict.items():
+                    ### if BLAST hit include similarity score
+                    if hitQuery in requiredBlastList or hitQuery in additionalBlastList:
+                        filteredClusters[(species, cluster.location[0], cluster.location[1])][hitQuery] = \
+                        [(protein.name, protein.hit_dict['blast'].get(hitQuery)/selfScoreDict[hitQuery]) for
+                         protein in (hitSet & clusterProts)]
+                    else:
+                        filteredClusters[(species, cluster.location[0], cluster.location[1])][hitQuery] = \
+                            [(protein.name, None) for
+                             protein in (hitSet & clusterProts)]
     return filteredClusters
 
 def processGbkDivFile(gbkDivFile,database,guiSignal=None):
@@ -584,6 +616,51 @@ def humanbytes(B):
       return '{0:.2f} GB'.format(B/GB)
    elif TB <= B:
       return '{0:.2f} TB'.format(B/TB)
+
+def formatGbkPGAP(gbkFile,name):
+    '''
+    given a genbank file that is annotated with prokka, 
+    '''
+    genbank_entries = SeqIO.parse(open(gbkFile), "genbank")
+    for entry in genbank_entries:
+        CDS_list = (feature for feature in entry.features if feature.type == 'CDS')
+        for CDS in CDS_list:
+            id = CDS.qualifiers['locus_tag'][0]
+            direction = CDS.location.strand
+            genbank_seq = CDS.location.extract(entry)
+            nt_seq = genbank_seq.seq
+            gene_start = max(0, CDS.location.nofuzzy_start)
+            gene_end = max(0, CDS.location.nofuzzy_end)
+            if 'translation' in CDS.qualifiers.keys():
+                prot_seq = Seq(CDS.qualifiers['translation'][0])
+            else:
+                if direction == 1:
+                    if gene_start == 0:
+                        if len(nt_seq) % 3 == 0:
+                            prot_seq = nt_seq.translate()
+                        elif len(nt_seq) % 3 == 1:
+                            prot_seq = nt_seq[1:].translate()
+                        else:
+                            prot_seq = nt_seq[2:].translate()
+                    else:
+                        prot_seq = nt_seq.translate()
+                if direction == -1:
+                    if gene_start == 0:
+                        prot_seq = nt_seq.translate()
+                    else:
+                        if len(nt_seq) % 3 == 0:
+                            prot_seq = nt_seq.translate()
+                        elif len(nt_seq) % 3 == 1:
+                            prot_seq = nt_seq[:-1].translate()
+                        else:
+                            prot_seq = nt_seq[:-2].reverse_complement().translate()
+            prot_function = CDS.qualifiers['product'][0]
+            with open('{}.function'.format(name),'a') as functionFile:
+                functionFile.write('{}\t-\t{}\n'.format(id,prot_function))
+            with open('{}.pep'.format(name),'a') as pepFile:
+                pepFile.write('>{}\n{}\n'.format(id,prot_seq))
+            with open('{}.nuc'.format(name),'a') as nucFile:
+                nucFile.write('>{}\n{}\n'.format(id,nt_seq))
 
 if __name__ == "__main__":
 
