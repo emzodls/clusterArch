@@ -237,7 +237,6 @@ def fetchGbksWithAcc(clusterList,window,outputFolder,guiSignal=None):
                 ncbiRequest = urllib.request.urlopen(esearchURL)
                 parseRequest = etree.parse(ncbiRequest)
                 ncbiID = [idElem.text for idElem in parseRequest.iter('Id')][0]
-                print(ncbiID)
                 acc2ncbi[acc] = ncbiID
             else:
                 ncbiID = acc2ncbi[acc]
@@ -261,8 +260,7 @@ def fetchGbksWithAcc(clusterList,window,outputFolder,guiSignal=None):
             if guiSignal:
                 guiSignal.emit((acc,ncbiID,summary))
             dlList.add((acc,ncbiID,summary))
-        except Exception as e:
-            print(e)
+        except:
             if guiSignal:
                 guiSignal.emit((acc,None,None))
             dlList.add((acc,None,None))
@@ -277,3 +275,69 @@ def fetchGbksWithAcc(clusterList,window,outputFolder,guiSignal=None):
             summaryFile.write('{},{},{}\n'.format(fileNameAcc, gi,summary))
     return dlList
 
+def protToFasta(proteinList,outfile):
+    protID2Acc = dict()
+    acc2ProtID = dict()
+    acc2gi = dict()
+    failedToFetch = list()
+    success = list()
+    for protein in proteinList:
+        acc = protein.name.split('.')[0]
+        proteinID = protein.fastaID
+        esearchURL = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=protein&term={}[accn]" \
+                     "&retmode=text&retmax=10&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(acc)
+        try:
+            ncbiRequest = urllib.request.urlopen(esearchURL)
+            parseRequest = etree.parse(ncbiRequest)
+            ncbiID = [idElem.text for idElem in parseRequest.iter('Id')][0]
+            acc2gi[acc] = ncbiID
+            protID2Acc[proteinID] = acc
+            acc2ProtID[acc] = proteinID
+            success.append(acc)
+        except:
+            print("Error Connecting to NCBI Server for acc {}".format(acc))
+            failedToFetch.append(acc)
+            pass
+    idList = list(acc2gi.values())
+    idChunks = [idList[x:x + 100] for x in range(0, len(acc2gi), 100)]
+    if os.path.isfile(outfile):
+        os.remove(outfile)
+
+    for dataChunk in idChunks:
+        fetchURL = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=protein&id={}" \
+                   "&retmode=text&rettype=fasta&retmax=251&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(','.join(str(gi) for gi in dataChunk))
+        def extract_records(records_handle):
+            buffer = []
+            for line in records_handle:
+                line = line.decode("utf-8", "ignore")
+                if line:
+                    if line.startswith(">"):
+                        accID = line.split()[0][1:].split('.')[0]
+
+                        buffer.append('>{}\n'.format(acc2ProtID[accID]))
+                    else:
+                        buffer.append(line)
+            return "".join(buffer)
+        fetchReq = urllib.request.urlopen(fetchURL)
+        with open(outfile, 'a') as output:
+            output.write(extract_records(fetchReq))
+
+if __name__ == '__main__':
+    clusterList = []
+    #
+    # for line in open('/Volumes/Data/lola_AS3/antimycin_ozmN/hits_genomesGB.csv'):
+    #     if '##' in line:
+    #         pass
+    #     else:
+    #         lineParse = line.split(',')
+    #         clusterList.append((lineParse[0],(int(lineParse[1]),int(lineParse[2]))))
+    # print(clusterList)
+    clusterList = [('EF552687', (20505, 87657)), ('CP006871', (6578021, 6611567)), ('CP006871', (1405296, 1502258)), ('CP006871', (9179933, 9267062)), ('CP007574', (6209940, 6264994)), ('CP000249', (2320878, 2324816))]
+
+    test = fetchGbksWithAcc(clusterList[:10], 100000, '/Volumes/Data/lola_AS3/antimycin_ozmN/testDL', guiSignal=None)
+    print(test)
+    # names,sizes = zip(*getGbkDlList('ENV'))
+    # print(names,sum(sizes))
+    #print(sum(x[1] for x in test))
+    # dl = wget.download('ftp://ftp.ncbi.nlm.nih.gov/genbank/{}'.format(test[2][0]),test[0][0])
+   # print(dl)

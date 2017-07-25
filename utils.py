@@ -48,7 +48,10 @@ if platform.system() == 'Windows':
             output_buf = ctypes.create_unicode_buffer(output_buf_size)
             needed = _GetShortPathNameW(long_name, output_buf, output_buf_size)
             if output_buf_size >= needed:
-                return output_buf.value
+                if output_buf.value:
+                    return output_buf.value
+                else:
+                    return long_name
             else:
                 output_buf_size = needed
 ###########################################
@@ -180,6 +183,7 @@ def runHmmBuild(hmmBuildExec,inFile,outFile):
         inFile = get_short_path_name(inFile)
         outFile = get_short_path_name(outFile)
     command = [hmmBuildExec,'-n',hmmName,outFile,inFile]
+    print(command)
     if platform.system() == 'Windows':
         print(platform.system())
         out,err,retcode = execute(command)
