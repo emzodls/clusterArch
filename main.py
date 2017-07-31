@@ -361,7 +361,7 @@ class runBlastWorker(QObject):
             self.doneBLAST.emit(False)
             return
         ## self blast
-        out, err, retcode = runBLASTself(self.blastpExec, inputFastas, self.outputDir,
+        out, err, retcode = runBLASTself(self.blastpExec, inputFastas, self.outputDir,self.searchName,
                                      eValue=str(self.blastEval))
         if retcode != 0:
             self.doneBLAST.emit(False)
@@ -420,14 +420,16 @@ class runHmmerWorker(QObject):
 class runProcessSearchListOptionalHits(QObject):
     start = pyqtSignal()
     result = pyqtSignal(dict)
-    def __init__(self,requiredBlastList,requiredHmmList,blastOutFile,blastEval,hmmOutFile,hmmScore,hmmDomLen,windowSize,
-                 totalHitsRequired, additionalBlastList=[], additionalHmmList=[]):
+    def __init__(self,requiredBlastList,requiredHmmList,selfBlastFile,blastOutFile,blastEval,
+                 hmmOutFile,hmmScore,hmmDomLen,
+                 windowSize,totalHitsRequired, additionalBlastList=[], additionalHmmList=[]):
         self.requiredBlastList = requiredBlastList
         self.requiredHmmList = requiredHmmList
 
         self.additionalBlastList = additionalBlastList
         self.additionalHmmList = additionalHmmList
 
+        self.selfBlastFile = selfBlastFile
         self.blastOutFile = blastOutFile
         self.blastEval = blastEval
         self.hmmOutFile = hmmOutFile
@@ -444,8 +446,8 @@ class runProcessSearchListOptionalHits(QObject):
     @pyqtSlot(dict)
     def run(self):
         filteredClusters = processSearchListOptionalHits(self.requiredBlastList, self.requiredHmmList,
-                                                         self.blastOutFile, self.blastEval,self.hmmOutFile,
-                                                         self.hmmScore,self.hmmDomLen,self.windowSize,
+                                                         self.selfBlastFile,self.blastOutFile, self.blastEval,
+                                                         self.hmmOutFile,self.hmmScore,self.hmmDomLen,self.windowSize,
                                                          self.totalHitsRequired,self.additionalBlastList,self.additionalHmmList)
         self.result.emit(filteredClusters)
 
@@ -1566,6 +1568,13 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         if not os.path.isdir(os.path.join(self.outputDir,self.searchName)):
             os.mkdir(os.path.join(self.outputDir,self.searchName))
         blastOutFile = os.path.join(self.outputDir, "{}_blast_results.out".format(self.searchName))
+        selfBlastFile = os.path.join(self.outputDir,"{}_self_blast_results.out".format(self.searchName))
+        if os.path.isfile(selfBlastFile):
+            with open(os.path.join(self.outputDir, self.searchName, '{}.clusterTools.self.blast'.format(self.searchName)),
+                      'w') as selfBlastResults:
+                for line in open(selfBlastFile):
+                    selfBlastResults.write('{}\n'.format(line.strip()))
+
         blastProts = set()
         if os.path.isfile(blastOutFile):
             with open(os.path.join(self.outputDir,self.searchName,'{}.clusterTools.blast'.format(self.searchName)),'w') as blastResults:
@@ -1589,9 +1598,12 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             summaryFile['BLAST'] = blastProts
             summaryFile['blastOut'] = os.path.join(self.outputDir, self.searchName,
                                                    '{}.clusterTools.blast'.format(self.searchName))
+            summaryFile['selfBlastOut'] = os.path.join(self.outputDir, self.searchName,
+                                                   '{}.clusterTools.self.blast'.format(self.searchName))
         else:
             summaryFile['BLAST'] = []
             summaryFile['blastOut'] = None
+            summaryFile['selfBlastOut'] = None
         if hmms:
             summaryFile['HMMer'] = hmms
             summaryFile['hmmerOut'] = os.path.join(self.outputDir, self.searchName, '{}.clusterTools.hmmer'.format(self.searchName))
@@ -2292,6 +2304,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
 
             blastOutFile = os.path.join(self.outputDir,"{}_blast_results.out".format(self.searchName))
             hmmOutFile = os.path.join(self.outputDir,'{}_hmmSearch.out'.format(self.searchName))
+            selfBlastFile = os.path.join(self.outputDir, "{}_self_blast_results.out".format(self.searchName))
 
             for idx in range(self.searchList.rowCount()):
                 if self.searchList.item(idx, 0).text() == 'HMMER Hits':
@@ -2370,7 +2383,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                     self.runnerThread = QThread()
                 self.runnerThread.start()
                 self.processSearchListWorker = runProcessSearchListOptionalHits(requiredBlastList,requiredHmmList,
-                                                                                    blastOutFile,
+                                                                                selfBlastFile,blastOutFile,
                                                                                     self.nameToParamDict['blastEval'],
                                                                                     hmmOutFile,
                                                                                     self.nameToParamDict['hmmScore'],
@@ -2601,6 +2614,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 hmms =  self.SavedResultSummary.get('HMMer',[])
                 if genes:
                     blastOutPath,blastOutName = os.path.split(self.SavedResultSummary['blastOut'])
+                    selfBlastOutPath, selfBlastOutName = os.path.split(self.SavedResultSummary['selfBlastOut'])
                     if self.verbose:
                         print('Blast Results File Path',os.path.join(resultsFilePath,blastOutName))
                 if hmms:
@@ -2612,10 +2626,15 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 ## Run check that the blast and hmm results files exist and are readable (check current directory and absolute path)
                 if not genes:
                     blastCheck = True
-                elif os.path.isfile(os.path.join(resultsFilePath,blastOutName)) and os.access(os.path.join(resultsFilePath,blastOutName), os.R_OK):
+                elif os.path.isfile(os.path.join(resultsFilePath,blastOutName)) and os.access(os.path.join(resultsFilePath,blastOutName), os.R_OK)\
+                        and os.path.isfile(os.path.join(resultsFilePath,selfBlastOutName)) and \
+                        os.access(os.path.join(resultsFilePath,selfBlastOutName), os.R_OK):
                     blastCheck = True
+                    self.SavedResultSummary['selfBlastOut'] = os.path.join(resultsFilePath,selfBlastOutName)
                     self.SavedResultSummary['blastOut'] = os.path.join(resultsFilePath,blastOutName)
-                elif os.path.isfile(self.SavedResultSummary['blastOut']) and os.access(self.SavedResultSummary['blastOut'], os.R_OK):
+
+                elif os.path.isfile(self.SavedResultSummary['blastOut']) and os.access(self.SavedResultSummary['blastOut'], os.R_OK) and \
+                    os.path.isfile(self.SavedResultSummary['selfBlastOut']) and os.access(self.SavedResultSummary['selfBlastOut'], os.R_OK):
                     blastCheck = True
                 else:
                     blastCheck = False
@@ -2814,6 +2833,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.updateStatusWinText(self.savedSearchstatusWin, 'Checking Blast and Hmmer Outputs', '4/6', 4)
 
         blastOutFile = self.SavedResultSummary.get('blastOut',None)
+        selfBlastFile = self.SavedResultSummary.get('selfBlastOut',None)
         hmmOutFile = self.SavedResultSummary.get('hmmerOut',None)
 
 
@@ -2882,7 +2902,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                     self.runnerThread = QThread()
                 self.runnerThread.start()
                 self.processSearchListWorker = runProcessSearchListOptionalHits(requiredBlastList, requiredHmmList,
-                                                                                blastOutFile,
+                                                                                selfBlastFile, blastOutFile,
                                                                                 self.nameToSavedParamDict['blastEval'],
                                                                                 hmmOutFile,
                                                                                 self.nameToSavedParamDict['hmmScore'],
@@ -2910,7 +2930,8 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         foldersToCheck = [self.outputDirectorySelector.itemText(idx) for idx in range(self.outputDirectorySelector.count())
                           if 'Select Directory...' not in self.outputDirectorySelector.itemText(idx)]
         filesToDelete = []
-        extensionsToCheck = ['*_blast_results.out','*_gene_queries.fa','*_hmmDB.hmm','*_hmmSearch.out']
+        extensionsToCheck = ['*_blast_results.out','*_gene_queries.fa','*_hmmDB.hmm','*_hmmSearch.out',
+                             '*_gene_queries.fa.*']
         for folder in foldersToCheck:
             for extension in extensionsToCheck:
                 filesToDelete.extend(glob(os.path.join(folder,extension)))
