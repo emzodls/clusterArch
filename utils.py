@@ -141,12 +141,12 @@ def MakeBlastDB(makeblastdbExec,dbPath,outputDir,outDBName):
         print('makeblastDB failed with retcode %d: %r' % (retcode, err))
     return out,err,retcode
 
-def runBLASTself(blastExec,inputFastas,outputDir,eValue='1E-05'):
+def runBLASTself(blastExec,inputFastas,outputDir,searchName,eValue='1E-05'):
     if platform.system() == 'Windows':
         inputFastas = get_short_path_name(inputFastas)
         outputDir = get_short_path_name(outputDir)
     command = [blastExec, "-db", inputFastas, "-query", inputFastas, "-outfmt", "6", "-max_target_seqs", "10000", "-max_hsps", '1',
-               "-evalue", eValue, "-out", os.path.join(outputDir,"self_blast_results.out")]
+               "-evalue", eValue, "-out", os.path.join(outputDir,"{}_self_blast_results.out".format(searchName))]
     out, err, retcode = execute(command)
     if retcode != 0:
         print('BLAST failed with retcode %d: %r' % (retcode, err))
@@ -248,8 +248,9 @@ def processSelfBlastScore(blastOutFile):
     return scoreDict
 
 
-def processSearchListOptionalHits(requiredBlastList,requiredHmmList,blastOutFile,blastEval,hmmOutFile,hmmScore, hmmDomLen,windowSize,
-                                  totalHitsRequired,additionalBlastList=[],additionalHmmList=[]):
+def processSearchListOptionalHits(requiredBlastList,requiredHmmList,selfBlastFile,blastOutFile,blastEval,
+                                  hmmOutFile,hmmScore, hmmDomLen,
+                                  windowSize,totalHitsRequired,additionalBlastList=[],additionalHmmList=[]):
     # Gather all of the proteins, might be a memory issue...code memory friendly version with sequential filters (?)
     prots = dict()
     if requiredBlastList or additionalBlastList:
@@ -262,8 +263,7 @@ def processSearchListOptionalHits(requiredBlastList,requiredHmmList,blastOutFile
 
     additionalBlastHitDict = dict()
     additionalHmmHitDict = dict()
-    outputDir, blastFile = os.path.split(blastOutFile)
-    selfScoreDict = processSelfBlastScore(os.path.join(outputDir,'self_blast_results.out'))
+    selfScoreDict = processSelfBlastScore(selfBlastFile)
 
     if requiredBlastList:
         requiredBlastHitDict = {hitName:set(protein for protein in prots.values() if hitName in protein.hit_dict['blast'].hits)
