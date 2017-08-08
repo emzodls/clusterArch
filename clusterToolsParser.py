@@ -1,8 +1,10 @@
-from antismash.modules.hmm_detection import rule_parser
+
 from Bio import SearchIO
 
 import string
 from enum import IntEnum
+
+from clusterTools.clusterAnalysis import Protein
 
 class RuleSyntaxError(SyntaxError):
     pass
@@ -139,34 +141,34 @@ class Token():
         if self.type == TokenTypes.INT:
             return self.token_text
         return str(self.type)
-
-class Details():
-    def __init__(self, cds, feats, results, cutoff):
-        self.cds = cds # str, name of cds that is being classified
-        self.features_by_id = feats # { id : feature }
-        self.results_by_id = results # { id : HSP list }
-        self.possibilities = set(res.query_id for res in results.get(cds, []))
-        self.cutoff = cutoff # int
-
-    def in_range(self, cds, other):
-        """ returns True if the two Locations are within cutoff distance
-
-            this may be redundant if inputs are already limited, but here
-            for safety
-        """
-        cds_start, cds_end = sorted([cds.start, cds.end])
-        other_start, other_end = sorted([other.start, other.end])
-        distance = min(abs(cds_end - other_start), abs(other_end - cds_start),
-                       abs(cds_end - other_end), abs(other_start - cds_start))
-        return distance < self.cutoff
-
-    def just_cds(self, cds_of_interest):
-        """ creates a new Details object with cds_of_interest as the focus
-
-            the largest impact is Details.possibilities is updated
-        """
-        return Details(cds_of_interest, self.features_by_id, self.results_by_id,
-                       self.cutoff)
+#
+# class Details():
+#     def __init__(self, cds, feats, results, cutoff):
+#         self.cds = cds # str, name of cds that is being classified
+#         self.features_by_id = feats # { id : feature }
+#         self.results_by_id = results # { id : HSP list }
+#         self.possibilities = set(res.query_id for res in results.get(cds, []))
+#         self.cutoff = cutoff # int
+#
+#     def in_range(self, cds, other):
+#         """ returns True if the two Locations are within cutoff distance
+#
+#             this may be redundant if inputs are already limited, but here
+#             for safety
+#         """
+#         cds_start, cds_end = sorted([cds.start, cds.end])
+#         other_start, other_end = sorted([other.start, other.end])
+#         distance = min(abs(cds_end - other_start), abs(other_end - cds_start),
+#                        abs(cds_end - other_end), abs(other_start - cds_start))
+#         return distance < self.cutoff
+#
+#     def just_cds(self, cds_of_interest):
+#         """ creates a new Details object with cds_of_interest as the focus
+#
+#             the largest impact is Details.possibilities is updated
+#         """
+#         return Details(cds_of_interest, self.features_by_id, self.results_by_id,
+#                        self.cutoff)
 
 class Conditions():
     def __init__(self, negated, sub_conditions=None):
@@ -190,7 +192,7 @@ class Conditions():
                 unique_operands.add(operand)
 
 
-    def are_subconditions_satisfied(self, details, any_in_cds=False, local_only=False):
+    def are_subconditions_satisfied(self, protein):
         """
             details : a Details instance
             any_in_cds : bool
@@ -203,15 +205,15 @@ class Conditions():
             local_only limits the search to the single CDS in details
         """
         if len(self.sub_conditions) == 1:
-            return self.negated ^ self.sub_conditions[0].is_satisfied(details, any_in_cds, local_only)
+            return self.negated ^ self.sub_conditions[0].is_satisfied(protein)
 
         # since ANDs are bound together, all subconditions we have here are ORs
         # which means a simple any() will cover us
-        sub_results = [sub.is_satisfied(details, any_in_cds, local_only) for sub in self.sub_conditions[::2]]
+        sub_results = [sub.is_satisfied(protein) for sub in self.sub_conditions[::2]]
         return any(sub_results)
 
-    def is_satisfied(self, details, any_in_cds=False, local_only=False):
-        return self.negated ^ self.are_subconditions_satisfied(details,any_in_cds, local_only)
+    def is_satisfied(self, protein):
+        return self.negated ^ self.are_subconditions_satisfied(protein)
 
     def __repr__(self):
         return self.__str__()
@@ -236,6 +238,8 @@ class AndCondition(Conditions):
         return " and ".join(map(str, self.operands))
 
 class MinimumCondition(Conditions):
+
+    ### need HMM counter in protein structure
     def __init__(self, negated, count, options):
         self.count = count
         self.options = set(options)
@@ -245,28 +249,10 @@ class MinimumCondition(Conditions):
             raise ValueError("Minimum conditions must have a required count > 0")
         super().__init__(negated)
 
-    def is_satisfied(self, details, any_in_cds=False, local_only=False):
-        hit_count = len(self.options.intersection(set(details.possibilities)))
-        if hit_count >= self.count:
-            return not self.negated
-            # and if we're just checking that one is satisfied, return early too
-        if not self.negated and any_in_cds:
-            return hit_count > 0
-        if local_only:
-            return self.negated ^ hit_count >= self.count
-        current_cds = details.features_by_id[details.cds]
-
-        # check to see if the remaining hits are in nearby CDSs
-        for other_id, other_feature in details.features_by_id.items():
-            if other_id == details.cds:
-                continue
-            if not details.in_range(current_cds.location, other_feature.location):
-                continue
-            other_options = [r.query_id for r in details.results_by_id.get(other_id, [])]
-            hit_count += len(self.options.intersection(set(other_options)))
-            if hit_count >= self.count:
-                return True ^ self.negated
-        return self.negated
+    def is_satisfied(self, protein):
+        domCtr = protein.getDomCts('hmm')
+        hit_count = sum(domCtr[option] for option in self.options)
+        return self.negated ^ hit_count >= self.count
 
     def __str__(self):
         return "{}minimum({}, [{}])".format("not " if self.negated else "",
@@ -277,9 +263,6 @@ class SingleCondition(Conditions):
         self.name = name
         super().__init__(negated)
     def is_satisfied(self, protein):
-        # do we only care about this CDS? then use the smaller set
-
-        ## details.possibilities should link to the hmmhit list of the protein
             return self.negated ^ (self.name in protein.getAnnotations('hmm'))
     def __str__(self):
         return "{}{}".format("not " if self.negated else "", self.name)
@@ -290,50 +273,36 @@ class ScoreCondition(Conditions):
         self.score = score
         super().__init__(negated)
 
-    def is_satisfied(self, details, any_in_cds=False, local_only=False):
+    def is_satisfied(self, protein):
         # do we only care about this CDS? then use the smaller set
-        if local_only or any_in_cds:
-            if self.name in details.possibilities:
-                for result in details.results_by_id[details.cds]:
-                    if result.query_id == self.name:
-                        return self.negated ^ (result.bitscore >= self.score)
-            return self.negated
-
-        cds_feature = details.features_by_id[details.cds]
-        # look at neighbours in range
-        for other, other_hits in details.results_by_id.items():
-            other_location = details.features_by_id[other].location
-            if not details.in_range(cds_feature.location, other_location):
-                continue
-            other_possibilities = [res.query_id for res in other_hits]
-            if self.name in other_possibilities:
-                for result in other_hits:
-                    # a positive match, so we can exit early
-                    if result.query_id == self.name and result.bitscore >= self.score:
-                        return not self.negated
-
-        # if negated and we failed to find anything, that's a good thing
+        if self.name in protein.getAnnotations('hmm'):
+            for hit,bitscore,coverage in protein.annotations['hmm'].values():
+                if hit == self.name:
+                    if bitscore <= self.score:
+                        pass
+                    else:
+                        return self.negated ^ (bitscore >= self.score)
         return self.negated
 
     def __str__(self):
         return "{}minscore({}, {})".format("not " if self.negated else "", self.name, self.score)
 
 class DetectionRule():
-    def __init__(self, conditions):
-        self.conditions = conditions
+    def __init__(self, condition):
+        self.condition = condition
 
     def detect(self, protein):
         # hit, {hit: 'meh'}, dummyResultsByID, 25
         # change details structure to incorporate protein HMM object
-        if not self.conditions.is_satisfied(protein, any_in_cds=True):
+        if not self.conditions.is_satisfied(protein):
             return False #at least one positive match required
-        return self.conditions.is_satisfied(protein, any_in_cds=False)
+        return self.conditions.is_satisfied(protein)
 
     def __repr__(self):
         return self.__str__()
 
     def __str__(self):
-        condition_text = str(self.conditions)
+        condition_text = str(self.condition)
         # strip off outer parens if they exist
         if condition_text[0] == "(" and condition_text[-1] == ')':
             condition_text = condition_text[1:-1]
@@ -347,7 +316,7 @@ class Parser():
         identifiers = set()
         tokens = Tokeniser(text.expandtabs()).tokens
             # gather all signature identifiers
-        for token in list(tokens)[1:]:
+        for token in list(tokens):
             if token.type == TokenTypes.IDENTIFIER:
                 identifiers.add(token.identifier)
         # start the iterator up for parsing
@@ -355,7 +324,7 @@ class Parser():
         try:
             self.current_token = next(self.tokens)
         except StopIteration:
-            pass
+            return
         self.rule = self._parse_rule()
 
         #### Add validity check from HMM list. ########
@@ -371,7 +340,7 @@ class Parser():
         if self.current_token is not None:
             raise RuleSyntaxError("Unexpected symbol %s\n%s\n%s%s" % (
                     self.current_token.type,
-                    self.lines[self.current_line - 1],
+                    self.text,
                     " "*self.current_token.position, "^"))
         return DetectionRule(conditions)
 
@@ -382,8 +351,7 @@ class Parser():
         conditions = []
         lvalue = self._parse_single_condition()
         append_lvalue = True # capture the lvalue if it's the only thing
-        while self.current_token and self.current_token.type in [TokenTypes.AND,
-                TokenTypes.OR]:
+        while self.current_token and self.current_token.type in [TokenTypes.AND,TokenTypes.OR]:
             if self.current_token.type == TokenTypes.AND:
                 conditions.append(self._parse_ands(lvalue))
                 append_lvalue = False
@@ -395,20 +363,22 @@ class Parser():
                 append_lvalue = True
         if append_lvalue:
             conditions.append(lvalue)
-
+            #print(conditions)
         if self.current_token is None:
             raise RuleSyntaxError("Unexpected end of rule, expected )\n%s" % (
-                    self.lines[self.current_line - 1]))
-        if self.current_token.type != TokenTypes.GROUP_CLOSE:
+                self.text))
+        if self.current_token.type is not TokenTypes.GROUP_CLOSE:
             raise RuleSyntaxError("Expected the end of a group, found %s\n%s\n%s^" % (
                     self.current_token,
-                    self.lines[self.current_line - 1],
+                    self.text,
                     " " * self.current_token.position))
-        elif self.current_token is not None:
-            raise RuleSyntaxError("Unexpected symbol, found %s\n%s\n%s^" % (
-                    self.current_token.token_text,
-                    self.lines[self.current_line - 1],
-                    " " * self.current_token.position))
+        # elif self.current_token is not None:
+        #     raise RuleSyntaxError("Unexpected symbol, found %s\n%s\n%s\n%s^" % (
+        #             self.current_token.token_text,
+        #             self.current_token.type,
+        #             self.text,
+        #             " " * self.current_token.position))
+        print(conditions)
         return conditions
 
     def _consume(self, expected):
@@ -417,7 +387,7 @@ class Parser():
         if self.current_token.type != expected:
             raise RuleSyntaxError("Expected %s but found %s\n%s\n%s%s" % (
                     expected, self.current_token.type,
-                    self.lines[self.current_line - 1],
+                    self.text,
                     " "*self.current_token.position, "^"))
         if expected == TokenTypes.INT:
             ret = self.current_token.value
@@ -453,7 +423,7 @@ class Parser():
             and_conditions.append(next_condition)
         return AndCondition(and_conditions)
 
-    def _parse_single_condition(self, allow_cds):
+    def _parse_single_condition(self):
         """
             CONDITION = [UNARY_OP] ( ID | CONDITION_GROUP | MINIMUM | CDS );
             or we're in a CDS (i.e. allow_cds == False)
@@ -484,7 +454,7 @@ class Parser():
         self._consume(TokenTypes.GROUP_CLOSE)
         return ScoreCondition(negated, ident, score)
 
-    def _parse_group(self, allow_cds):
+    def _parse_group(self):
         """
             CONDITION_GROUP = GROUP_OPEN CONDITIONS GROUP_CLOSE;
         """
@@ -509,7 +479,7 @@ class Parser():
         self._consume(TokenTypes.GROUP_CLOSE)
         if count < 0:
             raise ValueError("minimum count must be greater than zero: \n%s\n%s^" % (
-                             self.lines[self.current_line - 1],
+                text,
                              " "*initial_token.position))
         return MinimumCondition(negated, count, options)
 
@@ -530,34 +500,6 @@ class hmmHit():
     def __init__(self,hitID):
         self.query_id = hitID
 
-class Details():
-    def __init__(self, cds, feats, results, cutoff):
-        self.cds = cds # str, name of cds that is being classified
-        self.features_by_id = feats # { id : feature }
-        self.results_by_id = results # { id : HSP list }
-        self.possibilities = set(res.query_id for res in results.get(cds, []))
-        self.cutoff = cutoff # int
-
-    def in_range(self, cds, other):
-        """ returns True if the two Locations are within cutoff distance
-
-            this may be redundant if inputs are already limited, but here
-            for safety
-        """
-        cds_start, cds_end = sorted([cds.start, cds.end])
-        other_start, other_end = sorted([other.start, other.end])
-        distance = min(abs(cds_end - other_start), abs(other_end - cds_start),
-                       abs(cds_end - other_end), abs(other_start - cds_start))
-        return distance < self.cutoff
-
-    def just_cds(self, cds_of_interest):
-        """ creates a new Details object with cds_of_interest as the focus
-
-            the largest impact is Details.possibilities is updated
-        """
-        return Details(cds_of_interest, self.features_by_id, self.results_by_id,
-                       self.cutoff)
-
 def prepareRulesByIdDict(hmmResults,cutoff):
     results_by_id = dict()
     for result in hmmResults:
@@ -570,11 +512,10 @@ def prepareRulesByIdDict(hmmResults,cutoff):
     return results_by_id
 
 
-test = Tokeniser('transatpks	20	20	cds(minscore(PKS_KS,20) and ATd and (PKS_KS or ene_KS or mod_KS or hyb_KS or itr_KS or tra_KS))')
-test_iter = iter(test.tokens)
-current = next(test_iter)
-print(current)
-print(test.tokens)
+test = Parser('ATd and (PKS_KS or ene_KS or mod_KS or hyb_KS or itr_KS or tra_KS)')
+#test = Tokeniser('transAT	20	20	cds(minimum(2, KS_DOMAIN) and ((KS_DOMAIN and AT_DOMAIN) or (C_DOMAIN and A_DOMAIN) and R_DOMAIN))'.expandtabs())
+#print(test.tokens)
+#print(list(test.tokens)[1:])
 # parser = rule_parser.Parser(open('/Users/emzodls/antismash5/antismash/modules/hmm_detection/test_rule.txt'))
 # results = SearchIO.parse("/Volumes/Data/clusterToolsDB/mibig/mibigNRPS.out",'hmmsearch3-domtab')
 # dummyResultsByID = prepareRulesByIdDict(results,25)
