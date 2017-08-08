@@ -1,10 +1,5 @@
-
-from Bio import SearchIO
-
 import string
 from enum import IntEnum
-
-from clusterTools.clusterAnalysis import Protein
 
 class RuleSyntaxError(SyntaxError):
     pass
@@ -40,6 +35,7 @@ class TokenTypes(IntEnum):
     INT = 12
     COMMA = 13
     SCORE = 14
+    STRING = 15
 
     def __repr__(self):
         return self.__str__()
@@ -68,7 +64,7 @@ class Tokeniser():
                "and" : TokenTypes.AND, "or" : TokenTypes.OR,
                "not" : TokenTypes.NOT, "," : TokenTypes.COMMA,
                "minimum" : TokenTypes.MINIMUM, "cds" : TokenTypes.CDS,
-               "minscore" : TokenTypes.SCORE}
+               "minscore" : TokenTypes.SCORE, "domstr": TokenTypes.STRING}
 
     def __init__(self, text):
         """ Processes the given text into a list of tokens """
@@ -141,34 +137,6 @@ class Token():
         if self.type == TokenTypes.INT:
             return self.token_text
         return str(self.type)
-#
-# class Details():
-#     def __init__(self, cds, feats, results, cutoff):
-#         self.cds = cds # str, name of cds that is being classified
-#         self.features_by_id = feats # { id : feature }
-#         self.results_by_id = results # { id : HSP list }
-#         self.possibilities = set(res.query_id for res in results.get(cds, []))
-#         self.cutoff = cutoff # int
-#
-#     def in_range(self, cds, other):
-#         """ returns True if the two Locations are within cutoff distance
-#
-#             this may be redundant if inputs are already limited, but here
-#             for safety
-#         """
-#         cds_start, cds_end = sorted([cds.start, cds.end])
-#         other_start, other_end = sorted([other.start, other.end])
-#         distance = min(abs(cds_end - other_start), abs(other_end - cds_start),
-#                        abs(cds_end - other_end), abs(other_start - cds_start))
-#         return distance < self.cutoff
-#
-#     def just_cds(self, cds_of_interest):
-#         """ creates a new Details object with cds_of_interest as the focus
-#
-#             the largest impact is Details.possibilities is updated
-#         """
-#         return Details(cds_of_interest, self.features_by_id, self.results_by_id,
-#                        self.cutoff)
 
 class Conditions():
     def __init__(self, negated, sub_conditions=None):
@@ -237,6 +205,7 @@ class AndCondition(Conditions):
     def __str__(self):
         return " and ".join(map(str, self.operands))
 
+
 class MinimumCondition(Conditions):
 
     ### need HMM counter in protein structure
@@ -287,6 +256,15 @@ class ScoreCondition(Conditions):
     def __str__(self):
         return "{}minscore({}, {})".format("not " if self.negated else "", self.name, self.score)
 
+class DomainStringCondition(Conditions):
+    def __init__(self,negated,string):
+        self.string = string
+        super().__init__(negated)
+    def is_satisfied(self, protein):
+        return self.negated ^ (self.string in protein.getDomStr('hmm',';'))
+    def __str__(self):
+        return "{}contains string {}".format("not " if self.negated else "",self.string)
+
 class DetectionRule():
     def __init__(self, condition):
         self.condition = condition
@@ -294,9 +272,9 @@ class DetectionRule():
     def detect(self, protein):
         # hit, {hit: 'meh'}, dummyResultsByID, 25
         # change details structure to incorporate protein HMM object
-        if not self.conditions.is_satisfied(protein):
+        if not self.condition.is_satisfied(protein):
             return False #at least one positive match required
-        return self.conditions.is_satisfied(protein)
+        return self.condition.is_satisfied(protein)
 
     def __repr__(self):
         return self.__str__()
@@ -344,7 +322,7 @@ class Parser():
                     " "*self.current_token.position, "^"))
         return DetectionRule(conditions)
 
-    def _parse_conditions(self):
+    def _parse_conditions(self,is_group=False):
         """    CONDITIONS = CONDITION {BINARY_OP CONDITIONS}*;
         """
 
@@ -364,21 +342,21 @@ class Parser():
         if append_lvalue:
             conditions.append(lvalue)
             #print(conditions)
-        if self.current_token is None:
-            raise RuleSyntaxError("Unexpected end of rule, expected )\n%s" % (
-                self.text))
-        if self.current_token.type is not TokenTypes.GROUP_CLOSE:
-            raise RuleSyntaxError("Expected the end of a group, found %s\n%s\n%s^" % (
-                    self.current_token,
+        if is_group:
+            if self.current_token is None:
+                raise RuleSyntaxError("Unexpected end of rule, expected )\n%s" % (
+                    self.text))
+            if self.current_token.type is not TokenTypes.GROUP_CLOSE:
+                raise RuleSyntaxError("Expected the end of a group, found %s\n%s\n%s^" % (
+                        self.current_token,
+                        self.text,
+                        " " * self.current_token.position))
+        elif self.current_token is not None:
+            raise RuleSyntaxError("Unexpected symbol, found %s\n%s\n%s\n%s^" % (
+                    self.current_token.token_text,
+                    self.current_token.type,
                     self.text,
                     " " * self.current_token.position))
-        # elif self.current_token is not None:
-        #     raise RuleSyntaxError("Unexpected symbol, found %s\n%s\n%s\n%s^" % (
-        #             self.current_token.token_text,
-        #             self.current_token.type,
-        #             self.text,
-        #             " " * self.current_token.position))
-        print(conditions)
         return conditions
 
     def _consume(self, expected):
@@ -439,6 +417,8 @@ class Parser():
             return self._parse_minimum(negated=negated)
         elif self.current_token.type == TokenTypes.SCORE:
             return self._parse_score(negated=negated)
+        elif self.current_token.type == TokenTypes.STRING:
+            return self._parse_domstr(negated=negated)
         return SingleCondition(negated, self._consume(TokenTypes.IDENTIFIER))
 
     def _parse_score(self, negated=False):
@@ -459,7 +439,7 @@ class Parser():
             CONDITION_GROUP = GROUP_OPEN CONDITIONS GROUP_CLOSE;
         """
         self._consume(TokenTypes.GROUP_OPEN)
-        conditions = self._parse_conditions()
+        conditions = self._parse_conditions(is_group=True)
         self._consume(TokenTypes.GROUP_CLOSE)
         return conditions
 
@@ -479,9 +459,20 @@ class Parser():
         self._consume(TokenTypes.GROUP_CLOSE)
         if count < 0:
             raise ValueError("minimum count must be greater than zero: \n%s\n%s^" % (
-                text,
+                count,
                              " "*initial_token.position))
         return MinimumCondition(negated, count, options)
+    def _parse_domstr(self,negated=False):
+        """
+        DOMSTR = STR_LABEL GROUP_OPEN, LIST, GROUP_CLOSE
+        :param negated:
+        :return:
+        """
+        self._consume(TokenTypes.STRING)
+        self._consume(TokenTypes.GROUP_OPEN)
+        string = self._parse_list()
+        self._consume(TokenTypes.GROUP_CLOSE)
+        return DomainStringCondition(negated,';'.join(string))
 
     def _parse_list(self):
         """
@@ -512,15 +503,17 @@ def prepareRulesByIdDict(hmmResults,cutoff):
     return results_by_id
 
 
-test = Parser('ATd and (PKS_KS or ene_KS or mod_KS or hyb_KS or itr_KS or tra_KS)')
-#test = Tokeniser('transAT	20	20	cds(minimum(2, KS_DOMAIN) and ((KS_DOMAIN and AT_DOMAIN) or (C_DOMAIN and A_DOMAIN) and R_DOMAIN))'.expandtabs())
-#print(test.tokens)
-#print(list(test.tokens)[1:])
-# parser = rule_parser.Parser(open('/Users/emzodls/antismash5/antismash/modules/hmm_detection/test_rule.txt'))
-# results = SearchIO.parse("/Volumes/Data/clusterToolsDB/mibig/mibigNRPS.out",'hmmsearch3-domtab')
-# dummyResultsByID = prepareRulesByIdDict(results,25)
+# test = Parser('(minimum(3, [KS_DOMAIN]) and ((KS_DOMAIN and AT_DOMAIN) or (C_DOMAIN and A_DOMAIN) and R_DOMAIN))')
 #
-# for hit in dummyResultsByID:
-#     details = Details(hit,{hit:'meh'}, dummyResultsByID, 25)
-#     if parser.rules[0].conditions.is_satisfied(details):
-#         print(hit)
+# print(test.rule)
+# #test = Tokeniser('transAT	20	20	cds(minimum(2, KS_DOMAIN) and ((KS_DOMAIN and AT_DOMAIN) or (C_DOMAIN and A_DOMAIN) and R_DOMAIN))'.expandtabs())
+# #print(test.tokens)
+# #print(list(test.tokens)[1:])
+# # parser = rule_parser.Parser(open('/Users/emzodls/antismash5/antismash/modules/hmm_detection/test_rule.txt'))
+# # results = SearchIO.parse("/Volumes/Data/clusterToolsDB/mibig/mibigNRPS.out",'hmmsearch3-domtab')
+# # dummyResultsByID = prepareRulesByIdDict(results,25)
+# #
+# # for hit in dummyResultsByID:
+# #     details = Details(hit,{hit:'meh'}, dummyResultsByID, 25)
+# #     if parser.rules[0].conditions.is_satisfied(details):
+# #         print(hit)
