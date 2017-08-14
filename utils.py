@@ -331,6 +331,149 @@ def processSearchListOptionalHits(requiredBlastList,requiredHmmList,selfBlastFil
                              protein in (hitSet & clusterProts)]
     return filteredClusters
 
+def processSearchListCluster(requiredBlastList,requiredHmmList,selfBlastFile,blastOutFile,blastEval,
+                                  hmmOutFile,hmmScore, hmmDomLen,
+                                  windowSize,totalHitsRequired,additionalBlastList=[],additionalHmmList=[]):
+    # Gather all of the proteins, might be a memory issue...code memory friendly version with sequential filters (?)
+    prots = dict()
+    if requiredBlastList or additionalBlastList:
+        prots = clusterAnalysis.parseBLAST(blastOutFile,prots,swapQuery=True,evalCutoff=blastEval)
+    if requiredHmmList or additionalHmmList:
+        prots = clusterAnalysis.parse_hmmsearch_domtbl_anot(hmmOutFile,hmmDomLen,'hmm',prots,cutoff_score=hmmScore)
+
+    requiredBlastHitDict = dict()
+    requiredHmmHitDict = dict()
+
+    additionalBlastHitDict = dict()
+    additionalHmmHitDict = dict()
+    selfScoreDict = processSelfBlastScore(selfBlastFile)
+
+    if requiredBlastList:
+        requiredBlastHitDict = {hitName:set(protein for protein in prots.values() if hitName in protein.hit_dict['blast'].hits)
+                  for hitName in requiredBlastList}
+    if requiredHmmList:
+        requiredHmmHitDict = {hmms: set(protein for protein in prots.values() if len(set(hmms) & protein.getAnnotations('hmm')) == len(hmms))
+               for hmms in requiredHmmList}
+    if additionalBlastList:
+        additionalBlastHitDict = {hitName:set(protein for protein in prots.values() if hitName in protein.hit_dict['blast'].hits)
+                  for hitName in additionalBlastList}
+    if additionalHmmList:
+        additionalHmmHitDict = {hmms: set(protein for protein in prots.values() if len(set(hmms) & protein.getAnnotations('hmm')) == len(hmms))
+               for hmms in additionalHmmList}
+    requiredHitDict = {**requiredBlastHitDict,**requiredHmmHitDict}
+    additionalHitDict = {**additionalBlastHitDict, **additionalHmmHitDict}
+
+    #need this for repeat domains
+
+    requiredHitList = requiredBlastList+requiredHmmList
+    additionalHitList = additionalBlastList+additionalHmmList
+    numReqHits = len(requiredHitList)
+
+    hitProteins = set()
+    hitProteins.update(*requiredHitDict.values())
+    hitProteins.update(*additionalHitDict.values())
+
+    putativeClusters = clusterAnalysis.clusterProteins(hitProteins,windowSize)
+    assert totalHitsRequired >= numReqHits
+
+    numExtraHitsNeeded = totalHitsRequired - numReqHits
+    filteredClusters = dict()
+    for species,clusters in putativeClusters.items():
+        for cluster in clusters:
+            clusterProts = set(protein for protein in cluster)
+            requiredHitProts = set()
+            for hitID in requiredHitList:
+                requiredHitProts.update(clusterProts & requiredHitDict[hitID])
+            additionalHitProts = set()
+            for hitID in additionalHitList:
+                additionalHitProts.update(clusterProts & additionalHitDict[hitID])
+            '''
+            First Term: check if there enough protein hits to satisfy the number of required hits
+            Second Term: check if there are enough other hits to satisfy the required number of additional hits
+            Third Term: check that there are enough proteins to populate the list
+            Fourth Term: check that there is at least one hit per required hit in hit list
+            Fifth Term: check that there is enough to satisfy the additional hits
+            '''
+            if len(requiredHitProts) >= numReqHits and \
+                len(additionalHitProts) >= numExtraHitsNeeded and \
+                (len(clusterProts) >= totalHitsRequired)  and \
+                (sum(1 for hitID in requiredHitList if len(clusterProts & requiredHitDict[hitID]) >= 1) == numReqHits) and \
+                (sum(1 for hitID in additionalHitList if len(clusterProts & additionalHitDict[hitID]) >= 1) >= numExtraHitsNeeded):
+                print(cluster)
+                speciesClusters = filteredClusters.get(species,[])
+                speciesClusters.append(cluster)
+                filteredClusters[species] = speciesClusters
+    return filteredClusters
+
+def createJsonFile(clusters,blastHits,hmmHits,blastList,hmmList,geneIdxFile=None):
+    '''
+    :param clusters: dictionary where the key is the species and the values are Cluster objects that
+    are the result of the clusterTools query
+    :param blastList: list of proteins that were used in the clusterTools BLAST query
+    :param hmmList: list of HMMs that were used in the clusterTools hmmer query
+    :param geneIdxFile: optional clusterTool database file that will generate the coding sequences
+    between hits in a cluster
+    :return: string that can be written into a json file
+    '''
+    ct_data = []
+    for species in clusters.keys():
+        for idx,cluster in enumerate(cluster[species]):
+            bgcName = '{} cluster_{:03d}'.format(cluster.species,idx+1)
+            clusterDict = {}
+            clusterDict["id"] = bgcName
+            clusterDict['start'] = int(cluster.location[0])
+            clusterDict['end'] = int(cluster.location[1])
+            orfs = []
+            hitProts = set(prot for prot in cluster)
+            if geneIdxFile:
+                clusterProtIdxs = range(cluster[0].idx,cluster[-1].idx+1)
+            for protein in cluster:
+                proteinDict = dict()
+                proteinDict['id'] = protein.name
+                proteinDict['start'] = protein.location[0][0]
+                proteinDict['end'] = protein.location[0][1]
+                if protein.location[1] == '+':
+                    proteinDict['strand'] = 1
+                else:
+                    proteinDict['strand'] = -1
+                if protein in blastHits:
+                    for blastHit in blastList:
+                        hits = sorted([(blastHit, protein.hit_dict['blast'].get(blastHit)/selfScoreDict[hitQuery]) for
+                         protein in (hitSet & clusterProts)],key=lambda x: x[1],reverse=True)
+                        proteinDict['blastHitName'],proteinDict['blastHitScore'] = hits[0]
+
+            ## read fasta file first to get orfs
+            for line in open(fastaFile):
+                if line[0] == ">":
+                    header = line.strip()[1:].split(':')
+                    if header[2]:
+                        orfDict[header[0]]["id"] = header[2]
+                    elif header[4]:
+                        orfDict[header[0]]["id"] = header[4]
+                    else:
+                        orfDict[header[0]]["id"] = header[0]
+                    orfDict[header[0]]["start"] = int(header[6])
+                    orfDict[header[0]]["end"] = int(header[7])
+                    if header[-1] == '+':
+                        orfDict[header[0]]["strand"] = 1
+                    else:
+                        orfDict[header[0]]["strand"] = -1
+                    orfDict[header[0]]["domains"] = []
+            ## now read pfd file to add the domains to each of the orfs
+            for line in open(pfdFile):
+                entry = line.split('\t')
+                orf = entry[-1].strip().split(':')[0]
+                pfamID = entry[5].split('.')[0]
+                pfamDescr = pfam_descrs.get(pfamID, None)
+                if pfamDescr:
+                    orfDict[orf]["domains"].append(
+                        {'code': '{} : {}'.format(pfamID, pfamDescr), 'start': int(entry[3]), 'end': int(entry[4]),
+                         'bitscore': float(entry[1])})
+                else:
+                    orfDict[orf]["domains"].append(
+                        {'code': entry[5], 'start': int(entry[3]), 'end': int(entry[4]), 'bitscore': float(entry[1])})
+            bgcJsonDict[bgcName]['orfs'] = orfDict.values()
+    bs_data = [bgcJsonDict[clusterNames[int(bgc)]] for bgc in bgcs]
 def processGbkDivFile(gbkDivFile,database,guiSignal=None):
     ## unzip gbkDivFile
     try:
