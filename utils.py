@@ -24,10 +24,12 @@ from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 from Bio.Seq import Seq
 from Bio.Alphabet import generic_protein,generic_dna
-from clusterTools import clusterAnalysis
+from clusterTools import clusterAnalysis,clusterGraphics
 from random import random
 import sys,subprocess,os,platform
 import gzip,re,urllib
+from pickle import dump
+from random import randint
 
 ### To fix the file paths in windows ###
 # from http://stackoverflow.com/questions/23598289/how-to-get-windows-short-file-name-in-python
@@ -403,9 +405,16 @@ def processSearchListCluster(requiredBlastList,requiredHmmList,selfBlastFile,bla
                 speciesClusters = filteredClusters.get(species,[])
                 speciesClusters.append(cluster)
                 filteredClusters[species] = speciesClusters
-    return filteredClusters
+    hitDict = {**requiredHitDict,**additionalHitDict}
+    blastLists = (set(requiredBlastList),set(additionalBlastList))
+    hmmLists = (set(requiredHmmList),set(additionalHmmList))
+    hmmQuerys = set()
+    for hmms in requiredHmmList+ additionalHmmList:
+        for hmm in hmms:
+            hmmQuerys.add(hmm)
+    return filteredClusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict
 
-def createJsonFile(clusters,blastHits,hmmHits,blastList,hmmList,geneIdxFile=None):
+def createJsonFile(clusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict,geneIdxFile=None):
     '''
     :param clusters: dictionary where the key is the species and the values are Cluster objects that
     are the result of the clusterTools query
@@ -416,13 +425,28 @@ def createJsonFile(clusters,blastHits,hmmHits,blastList,hmmList,geneIdxFile=None
     :return: string that can be written into a json file
     '''
     ct_data = []
+    requiredBlast,optionalBlast = blastLists
+    requiredHMM,optionalHMM = hmmLists
+    colors = clusterGraphics._get_colors_Janus(len(requiredBlast|optionalBlast|requiredHMM|optionalHMM) + len(hmmQuerys))
+    hitColorDict = {}
+    for idx,hit in enumerate(requiredBlast|optionalBlast|requiredHMM|optionalHMM):
+        hitColorDict[hit] = 'rgb({},{},{})'.format(*map(lambda x: int(x*255),colors[idx]))
+    offSet = len(requiredBlast|optionalBlast|requiredHMM|optionalHMM)
+    hmmColors = {}
+    for idx,hmm in enumerate(hmmQuerys):
+        hmmColors[hmm] = 'rgb({},{},{})'.format(*map(lambda x: int(x*255),colors[idx+offSet]))
+    biggestCluster = 0
     for species in clusters.keys():
-        for idx,cluster in enumerate(cluster[species]):
-            bgcName = '{} cluster_{:03d}'.format(cluster.species,idx+1)
+        for idx,cluster in enumerate(clusters[species]):
+            bgcName = '{} cluster'.format(cluster.species,idx+1)
+            if cluster.size() >= biggestCluster:
+                biggestCluster = cluster.size()
             clusterDict = {}
             clusterDict["id"] = bgcName
             clusterDict['start'] = int(cluster.location[0])
             clusterDict['end'] = int(cluster.location[1])
+            clusterDict['offset'] = int(cluster[0].location[0][0]) - 1
+            clusterDict['size'] = int(cluster.size())
             orfs = []
             hitProts = set(prot for prot in cluster)
             if geneIdxFile:
@@ -430,50 +454,74 @@ def createJsonFile(clusters,blastHits,hmmHits,blastList,hmmList,geneIdxFile=None
             for protein in cluster:
                 proteinDict = dict()
                 proteinDict['id'] = protein.name
-                proteinDict['start'] = protein.location[0][0]
-                proteinDict['end'] = protein.location[0][1]
+                proteinDict['start'] = protein.location[0][0] - clusterDict['offset']
+                proteinDict['end'] = protein.location[0][1] - clusterDict['offset']
                 if protein.location[1] == '+':
                     proteinDict['strand'] = 1
                 else:
                     proteinDict['strand'] = -1
-                if protein in blastHits:
-                    for blastHit in blastList:
-                        hits = sorted([(blastHit, protein.hit_dict['blast'].get(blastHit)/selfScoreDict[hitQuery]) for
-                         protein in (hitSet & clusterProts)],key=lambda x: x[1],reverse=True)
-                        proteinDict['blastHitName'],proteinDict['blastHitScore'] = hits[0]
-
-            ## read fasta file first to get orfs
-            for line in open(fastaFile):
-                if line[0] == ">":
-                    header = line.strip()[1:].split(':')
-                    if header[2]:
-                        orfDict[header[0]]["id"] = header[2]
-                    elif header[4]:
-                        orfDict[header[0]]["id"] = header[4]
-                    else:
-                        orfDict[header[0]]["id"] = header[0]
-                    orfDict[header[0]]["start"] = int(header[6])
-                    orfDict[header[0]]["end"] = int(header[7])
-                    if header[-1] == '+':
-                        orfDict[header[0]]["strand"] = 1
-                    else:
-                        orfDict[header[0]]["strand"] = -1
-                    orfDict[header[0]]["domains"] = []
-            ## now read pfd file to add the domains to each of the orfs
-            for line in open(pfdFile):
-                entry = line.split('\t')
-                orf = entry[-1].strip().split(':')[0]
-                pfamID = entry[5].split('.')[0]
-                pfamDescr = pfam_descrs.get(pfamID, None)
-                if pfamDescr:
-                    orfDict[orf]["domains"].append(
-                        {'code': '{} : {}'.format(pfamID, pfamDescr), 'start': int(entry[3]), 'end': int(entry[4]),
-                         'bitscore': float(entry[1])})
+                ## first check if protein is a hit for an HMM Request
+                if any(protein.hit_dict['blast'].get(blastHit) for blastHit in requiredBlast):
+                    for blastHit in requiredBlast:
+                        hits = sorted([(blastHit, protein.hit_dict['blast'].get(blastHit) / selfScoreDict[blastHit]) for
+                                       protein in (hitDict[blastHit] & hitProts)], key=lambda x: x[1], reverse=True)
+                        proteinDict['hitName'] = [hits[0][0]]
+                        proteinDict['blastHitScore'] = round(hits[0][1], 3)
+                        proteinDict['color'] = hitColorDict[hits[0][0]]
+                elif any(protein.hit_dict['blast'].get(blastHit) for blastHit in optionalBlast):
+                    for blastHit in optionalBlast:
+                        hits = sorted([(blastHit, protein.hit_dict['blast'].get(blastHit) / selfScoreDict[blastHit]) for
+                                       protein in (hitDict[blastHit] & hitProts)], key=lambda x: x[1], reverse=True)
+                        proteinDict['hitName'] = [hits[0][0]]
+                        proteinDict['blastHitScore'] = round(hits[0][1], 3)
+                        proteinDict['color'] = hitColorDict[hits[0][0]]
                 else:
-                    orfDict[orf]["domains"].append(
-                        {'code': entry[5], 'start': int(entry[3]), 'end': int(entry[4]), 'bitscore': float(entry[1])})
-            bgcJsonDict[bgcName]['orfs'] = orfDict.values()
-    bs_data = [bgcJsonDict[clusterNames[int(bgc)]] for bgc in bgcs]
+                    for hmmQuery in requiredHMM:
+                        hmmHitProts = hitDict[hmmQuery]
+                        if protein in hmmHitProts:
+                            proteinDict.setdefault('hitName',[])
+                            proteinDict['hitName'].append(str(hmmQuery))
+                            proteinDict['color'] = hitColorDict[hmmQuery]
+                    for hmmQuery in optionalHMM:
+                        hmmHitProts = hitDict[hmmQuery]
+                        if protein in hmmHitProts and 'hitName' not in proteinDict:
+                            proteinDict.setdefault('hitName',[])
+                            proteinDict['hitName'].append(str(hmmQuery))
+                            proteinDict['color'] = hitColorDict[hmmQuery]
+                            proteinDict['color'] = hitColorDict[hmmQuery]
+
+                if 'color' not in proteinDict:
+                    proteinDict['color'] = 'rgb(211,211,211)'
+
+                proteinDict['hitName'] = '; '.join(proteinDict['hitName'])
+                ## now add the HMMs
+                if 'hmm' in protein.annotations:
+                    proteinDict.setdefault("domains",[])
+                    for (start,end),(code,score,cvg) in protein.annotations['hmm'].items():
+                        if code in hmmQuerys:
+                            proteinDict["domains"].append({'code': code, 'start': int(start), 'end': int(end),
+                                                       'bitscore': score,'hmmQuery': code,
+                                                           'color': hmmColors.get(code,'rgb(211,211,211)')})
+                        else:
+                            proteinDict["domains"].append({'code': code, 'start': int(start), 'end': int(end),
+                                                           'bitscore': score,
+                                                           'color': hmmColors.get(code,'rgb(211,211,211)')})
+                orfs.append(proteinDict)
+            #
+
+            clusterDict['orfs'] = orfs
+            ct_data.append(clusterDict)
+            hits = [hit for hit in hitColorDict.keys()]
+            hit_colors = [hitColorDict[hit] for hit in hits]
+            hits = [str(hit) for hit in hits]
+            hmms = [str(hit) for hit in hmmColors.keys()]
+            hmm_colors = [hmmColors[hmm] for hmm in hmms]
+    return 'var ct_scale = {}\nvar ct_data={}\nvar hits={}\nvar hit_colors={}\nvar hmms={}\nvar hmm_colors={}'.format(int(biggestCluster),
+                                                                                              str(ct_data),
+                                                                                              str(hits),
+                                                                                              str(hit_colors),
+                                                                                                str(hmms),
+                                                                                                str(hmm_colors))
 def processGbkDivFile(gbkDivFile,database,guiSignal=None):
     ## unzip gbkDivFile
     try:
@@ -808,9 +856,20 @@ def formatGbkPGAP(gbkFile,name):
                 pepFile.write('>{}\n{}\n'.format(id,prot_seq))
             with open('{}.nuc'.format(name),'a') as nucFile:
                 nucFile.write('>{}\n{}\n'.format(id,nt_seq))
+def generateCtDBIdxFile(ctDB,outfile):
+    genesSpeciesIdx = dict()
+    with open(ctDB) as databaseHandle:
+        for line in databaseHandle:
+            line = line.strip()
+            if line.startswith('>'):
+                species_id,position,direction,internal_id,protein_id = line[1:].split('|')
+                genesIdx = genesSpeciesIdx.get(species_id,[])
+                gene_start,gene_end = [int(x) for x in position.split('-')]
+                genesIdx.append((gene_start,gene_end,direction))
+                genesSpeciesIdx[species_id] = genesIdx
+    dump(genesSpeciesIdx,open(outfile,'wb'))
 
+    return
 if __name__ == "__main__":
-
-    print(processSearchListOptionalHits([],[('AT_DOMAIN', 'KS_DOMAIN'),
-                                      ('AT_DOMAIN', 'KS_DOMAIN'),('AT_DOMAIN', 'KS_DOMAIN'),('AT_DOMAIN', 'KS_DOMAIN')],'',
-                                  1e5,'/Users/emzodls/Downloads/testClusterTools/hmmSearch.out',30,15,50000,4,additionalHmmList=[('AT_DOMAIN', 'KS_DOMAIN')]))
+    os.chdir('/Volumes/Data/clusterToolsDB/mibig')
+    generateCtDBIdxFile('mibig13CDS.fasta', 'mibig13CDSctIdx.db')
