@@ -28,7 +28,7 @@ from clusterTools import clusterAnalysis,clusterGraphics
 from random import random
 import sys,subprocess,os,platform
 import gzip,re,urllib
-from pickle import dump
+from pickle import dump,load
 from random import randint
 
 ### To fix the file paths in windows ###
@@ -436,6 +436,10 @@ def createJsonFile(clusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict,
     for idx,hmm in enumerate(hmmQuerys):
         hmmColors[hmm] = 'rgb({},{},{})'.format(*map(lambda x: int(x*255),colors[idx+offSet]))
     biggestCluster = 0
+    if geneIdxFile:
+        geneIdxDict = load(open(geneIdxFile, 'rb'))
+    else:
+        geneIdxDict = {}
     for species in clusters.keys():
         for idx,cluster in enumerate(clusters[species]):
             bgcName = '{} cluster'.format(cluster.species,idx+1)
@@ -449,8 +453,6 @@ def createJsonFile(clusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict,
             clusterDict['size'] = int(cluster.size())
             orfs = []
             hitProts = set(prot for prot in cluster)
-            if geneIdxFile:
-                clusterProtIdxs = range(cluster[0].idx,cluster[-1].idx+1)
             for protein in cluster:
                 proteinDict = dict()
                 proteinDict['id'] = protein.name
@@ -507,8 +509,32 @@ def createJsonFile(clusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict,
                                                            'bitscore': score,
                                                            'color': hmmColors.get(code,'rgb(211,211,211)')})
                 orfs.append(proteinDict)
-            #
-
+            if geneIdxDict:
+                try:
+                    clusterProtIdxs = range(cluster[0].idx,cluster[-1].idx+1)
+                    species = cluster.species
+                    print(species)
+                    print(clusterProtIdxs)
+                    hitIdxs = set(x.idx for x in hitProts)
+                    print(hitIdxs)
+                    for geneIdx in clusterProtIdxs:
+                        if geneIdx not in hitIdxs:
+                            speciesIdx = geneIdxDict.get(species,[])
+                            if speciesIdx:
+                                print(species,geneIdx)
+                                start,end,direction = speciesIdx[geneIdx-1]
+                                proteinDict = {}
+                                proteinDict['start'] = start - clusterDict['offset']
+                                proteinDict['end'] = end - clusterDict['offset']
+                                if direction == '+':
+                                    proteinDict['strand'] = 1
+                                else:
+                                    proteinDict['strand'] = -1
+                                proteinDict['color'] = 'rgb(155,155,155)'
+                                orfs.append(proteinDict)
+                except Exception as e:
+                    print(e)
+                    pass
             clusterDict['orfs'] = orfs
             ct_data.append(clusterDict)
             hits = [hit for hit in hitColorDict.keys()]
@@ -871,5 +897,5 @@ def generateCtDBIdxFile(ctDB,outfile):
 
     return
 if __name__ == "__main__":
-    os.chdir('/Volumes/Data/clusterToolsDB/mibig')
-    generateCtDBIdxFile('mibig13CDS.fasta', 'mibig13CDSctIdx.db')
+    os.chdir('/Volumes/Data/clusterToolsDB/genomesRS')
+    generateCtDBIdxFile('archBactProtMeta.clusterToolDB.fasta', 'archBactProtMeta.db')
