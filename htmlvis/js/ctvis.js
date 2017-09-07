@@ -26,21 +26,41 @@ function ct(ct_data, ct_scale, hits,hit_colors,hmms,hmm_colors,container) {
     		$(this).attr("height",$(this).find("g")[0].getBoundingClientRect().height*1.3);
     	});
   }
-    ui.append('<div id="legend">')
-    var legendDiv = $("#legend");
-    legendDiv.append("<h3>Legend</h3>");
-    legendDiv.append("<h4>Queries</h4>");
-    legendDiv.append('<div id="geneQueries">');
+    
+ui.append('<div style="text-align:right" class="desc-container" id="legend_container">');
+var legendCont = $('#legend_container');
+legendCont.append("<p style='display:inline;font-size:x-small'><a title='Show Legend' id='toggle' href='##'align='right'>Toggle Legend</a></p>");
+
+legendCont.append('<div style="text-align:left" class="desc-ui hidden" style="margin-top: 2px;" id="legend">');
+
+var legendDiv = $('#legend');
+
+legendDiv.append("<h4 style='display:inline'>Gene Hits</h4>");
+legendDiv.append('<div id="geneQueries">');
     var geneQueries = $("#geneQueries");
     for (var i in hits){
-        geneQueries.append('<svg width="20px" height="20px"><rect width="20px" height="20px" style="fill:' + hit_colors[i]+ ';stroke-width:1;stroke:rgb(0,0,0)"/></svg>');
-        geneQueries.append('\t'+hits[i]+'\t');
+        geneQueries.append('<div id="geneHit-' + i + '">');
+        var geneQuery = $("#geneHit-"+i);
+        geneQuery.append('<svg width="20px" height="20px"><rect width="20px" height="20px" style="fill:' + hit_colors[i]+ ';stroke-width:1;stroke:rgb(0,0,0)"/></svg>');
+        geneQuery.append('\t'+hits[i]+'\t');
     }
-    legendDiv.append("<h4>HMMs</h4>");
+    legendDiv.append("<h4 style='display:inline'>HMM Hits</h4>");
     legendDiv.append('<div id="hmmQueries">');
     var hmmQueries = $("#hmmQueries");
     for (var i in hmms){
+        hmmQueries.append('<div  id="hmmHit-' + i + '">');
+        var hmmQuery = $("#hmmHit-"+i);
         hmmQueries.append('<svg width="20px" height="20px"><rect width="20px" height="20px" style="fill:' + hmm_colors[i]+ ';stroke-width:1;stroke:rgb(0,0,0)"/></svg>');
         hmmQueries.append('\t'+hmms[i]+'\t');
     }
+   
+  var toggle_btn = $("#toggle");
+  toggle_btn.click(function(handler){
+    if (legendDiv.hasClass("hidden")) {
+      legendDiv.removeClass("hidden");
+    } else {
+      legendDiv.addClass("hidden")
+      }
+    handler.stopPropagation();
+  });
 }
