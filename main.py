@@ -29,7 +29,7 @@ from PyQt5.QtWidgets import (QApplication, QFileDialog, QMainWindow,
         QMessageBox,QTableWidgetItem,QWidget,QListWidgetItem)
 from utils import parseSeqFile,parseHMMfile,generateInputFasta,generateHMMdb,MakeBlastDB,runBLAST,runBLASTself,\
     runHmmsearch,proccessGbks,processSearchListOptionalHits,humanbytes,processGbkDivFile,\
-    ncbiGenomeFastaParser,fastaDictToSeqRecs,writeSeqRecs,runHmmCheck,runHmmBuild
+    ncbiGenomeFastaParser,fastaDictToSeqRecs,writeSeqRecs,runHmmCheck,runHmmBuild,generateCtDBIdxFile,processSearchListClusterJson
 from collections import Counter
 from glob import iglob,glob
 from itertools import chain
@@ -419,7 +419,7 @@ class runHmmerWorker(QObject):
 
 class runProcessSearchListOptionalHits(QObject):
     start = pyqtSignal()
-    result = pyqtSignal(dict)
+    result = pyqtSignal(tuple)
     def __init__(self,requiredBlastList,requiredHmmList,selfBlastFile,blastOutFile,blastEval,
                  hmmOutFile,hmmScore,hmmDomLen,
                  windowSize,totalHitsRequired, additionalBlastList=[], additionalHmmList=[]):
@@ -444,12 +444,13 @@ class runProcessSearchListOptionalHits(QObject):
         super(runProcessSearchListOptionalHits, self).__init__()
     @pyqtSlot()
     @pyqtSlot(dict)
+    @pyqtSlot(tuple)
     def run(self):
-        filteredClusters = processSearchListOptionalHits(self.requiredBlastList, self.requiredHmmList,
+        output = processSearchListClusterJson(self.requiredBlastList, self.requiredHmmList,
                                                          self.selfBlastFile,self.blastOutFile, self.blastEval,
                                                          self.hmmOutFile,self.hmmScore,self.hmmDomLen,self.windowSize,
-                                                         self.totalHitsRequired,self.additionalBlastList,self.additionalHmmList)
-        self.result.emit(filteredClusters)
+                                                         self.totalHitsRequired,self.additionalBlastList,self.additionalHmmList,jsonOutput=True)
+        self.result.emit(output)
 
 class exportSelectedGbWorker(QObject):
     start = pyqtSignal()
@@ -2399,8 +2400,10 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 self.processSearchListWorker.start.emit()
 
     @pyqtSlot(dict)
-    def generateResults(self,filteredClusters,statusWin,blastList,hmmList,savedSearch=False):
+    def generateResults(self,output,statusWin,blastList,hmmList,savedSearch=False):
         self.setEnabled(True)
+        filteredClusters,json = output
+        print(json)
         if savedSearch:
             self.updateLastSearch()
         if filteredClusters:
@@ -2408,8 +2411,13 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                                      '6/6', 6)
             statusWin.viewResultsBtn.setEnabled(True)
             statusWin.viewResultsBtn.clicked.connect(lambda: self.showResultsWindow(statusWin,blastList,hmmList,filteredClusters))
+            jsonOutFile = os.path.join(self.outputDir, '{}.json'.format(self.searchName))
+            if json != '':
+                with open(jsonOutFile,'w') as outfile:
+                    outfile.write(json)
             if self.runnerThread:
                 self.runnerThread.terminate()
+
         else:
             self.updateStatusWinText(statusWin, 'Search Complete: No Results Found',
                                      '6/6', 6)

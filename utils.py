@@ -334,9 +334,9 @@ def processSearchListOptionalHits(requiredBlastList,requiredHmmList,selfBlastFil
                              protein in (hitSet & clusterProts)]
     return filteredClusters
 
-def processSearchListCluster(requiredBlastList,requiredHmmList,selfBlastFile,blastOutFile,blastEval,
+def processSearchListClusterJson(requiredBlastList,requiredHmmList,selfBlastFile,blastOutFile,blastEval,
                                   hmmOutFile,hmmScore, hmmDomLen,
-                                  windowSize,totalHitsRequired,additionalBlastList=[],additionalHmmList=[]):
+                                  windowSize,totalHitsRequired,additionalBlastList=[],additionalHmmList=[],jsonOutput=False):
     # Gather all of the proteins, might be a memory issue...code memory friendly version with sequential filters (?)
     prots = dict()
     if requiredBlastList or additionalBlastList:
@@ -365,6 +365,7 @@ def processSearchListCluster(requiredBlastList,requiredHmmList,selfBlastFile,bla
                for hmms in additionalHmmList}
     requiredHitDict = {**requiredBlastHitDict,**requiredHmmHitDict}
     additionalHitDict = {**additionalBlastHitDict, **additionalHmmHitDict}
+    hitDict = {**requiredHitDict,**additionalHitDict}
 
     #need this for repeat domains
 
@@ -381,6 +382,7 @@ def processSearchListCluster(requiredBlastList,requiredHmmList,selfBlastFile,bla
 
     numExtraHitsNeeded = totalHitsRequired - numReqHits
     filteredClusters = dict()
+    filteredCTvisOutput = dict()
     for species,clusters in putativeClusters.items():
         for cluster in clusters:
             clusterProts = set(protein for protein in cluster)
@@ -397,51 +399,63 @@ def processSearchListCluster(requiredBlastList,requiredHmmList,selfBlastFile,bla
             Fourth Term: check that there is at least one hit per required hit in hit list
             Fifth Term: check that there is enough to satisfy the additional hits
             '''
+
             if len(requiredHitProts) >= numReqHits and \
                 len(additionalHitProts) >= numExtraHitsNeeded and \
                 (len(clusterProts) >= totalHitsRequired)  and \
                 (sum(1 for hitID in requiredHitList if len(clusterProts & requiredHitDict[hitID]) >= 1) == numReqHits) and \
                 (sum(1 for hitID in additionalHitList if len(clusterProts & additionalHitDict[hitID]) >= 1) >= numExtraHitsNeeded):
-                print(cluster)
                 speciesClusters = filteredClusters.get(species,[])
                 speciesClusters.append(cluster)
                 filteredClusters[species] = speciesClusters
-    hitDict = {**requiredHitDict,**additionalHitDict}
-    blastLists = (set(requiredBlastList),set(additionalBlastList))
-    hmmLists = (set(requiredHmmList),set(additionalHmmList))
-    hmmQuerys = set()
-    for hmms in requiredHmmList+ additionalHmmList:
-        for hmm in hmms:
-            hmmQuerys.add(hmm)
-    return filteredClusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict
+                filteredCTvisOutput[(species, cluster.location[0], cluster.location[1])] = dict()
+                for hitQuery, hitSet in hitDict.items():
+                    ### if BLAST hit include similarity score
+                    if hitQuery in requiredBlastList or hitQuery in additionalBlastList:
+                        filteredCTvisOutput[(species, cluster.location[0], cluster.location[1])][hitQuery] = \
+                            [(protein.name, protein.hit_dict['blast'].get(hitQuery) / selfScoreDict[hitQuery]) for
+                             protein in (hitSet & clusterProts)]
+                    else:
+                        filteredCTvisOutput[(species, cluster.location[0], cluster.location[1])][hitQuery] = \
+                            [(protein.name, None) for
+                             protein in (hitSet & clusterProts)]
 
-def processSearchListClusterAssign(cluster,hitDict,blastLists,hmmLists):
-    # Gather all of the proteins, might be a memory issue...code memory friendly version with sequential filters (?)
+    if jsonOutput:
+        blastLists = (set(requiredBlastList),set(additionalBlastList))
+        hmmLists = (set(requiredHmmList),set(additionalHmmList))
+        hmmQuerys = set()
+        for hmms in requiredHmmList+ additionalHmmList:
+            for hmm in hmms:
+                hmmQuerys.add(hmm)
+        jsonFile = createJsonFile(filteredClusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict)
+    else:
+        jsonFile = ''
+
+    return filteredCTvisOutput,jsonFile
+
+def getHitPriority(cluster,hitDict,blastLists,hmmLists):
     requiredBlast,optionalBlast = blastLists
     requiredHMM,optionalHMM = hmmLists
-    requiredHitsToAssign = deepcopy(requiredBlast+requiredHMM)
-    additionalHits = deepcopy(optionalBlast+optionalHMM)
+    requiredHits= requiredBlast|requiredHMM
     proteinHits = dict()
     hitQueryProtein = dict()
 
     ## Get possible assignments for each of the proteins
     for protein in cluster:
         proteinHitList = proteinHits.setdefault(protein.name,[])
-        hitQueryList = hitQueryProtein.setdefault()
         for hitQuery,hitSet in hitDict.items():
             hitQueryList = hitQueryProtein.setdefault(hitQuery,[])
             if protein in hitSet:
-                proteinHitList.append(hitQuery)
                 hitQueryList.append(protein.name)
+                proteinHitList.append(hitQuery)
+    # set priorities for assignment based on number of hits for optional hits, priority is #numReqHits + num proteins
+    priorityReqBlast =  {hitQuery:len(hitQueryProtein[hitQuery]) for hitQuery in requiredBlast}
+    priorityReqHMM = {hitQuery:len(hitQueryProtein[hitQuery]) + len(requiredBlast) for hitQuery in requiredHMM}
+    priorityAdditionalBlast = { hitQuery:len(hitQueryProtein[hitQuery]) + len(requiredHits) for hitQuery in optionalBlast}
+    priorityAdditionalHMM = {hitQuery: len(hitQueryProtein[hitQuery]) + len(requiredHits)+len(optionalBlast) for hitQuery in optionalHMM}
+    priorityDict = {**priorityReqBlast, **priorityReqHMM, **priorityAdditionalBlast,**priorityAdditionalHMM}
 
-    ## if there is only hit for something required assign those immediately
-    hitAssignments = []
-    unassignedProteins = set(x.name for x in cluster)
-    while requiredHitsToAssign:
-        uniqueHits = [hit for hit in requiredHitsToAssign if len(hitQueryProtein[hit]) == 1]
-        for hit in uniqueHits:
-            hitAssignments.append((hitQueryProtein[hit][0].name,hit))
-            unassignedProteins.remove(hitQueryProtein[hit][0].name)
+    return priorityDict,proteinHits
 
 def createJsonFile(clusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict,geneIdxFile=None):
     '''
@@ -474,6 +488,7 @@ def createJsonFile(clusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict,
             bgcName = '{} cluster'.format(cluster.species,idx+1)
             if cluster.size() >= biggestCluster:
                 biggestCluster = cluster.size()
+            hitPriorities,proteinHits = getHitPriority(cluster,hitDict,blastLists,hmmLists)
             clusterDict = {}
             clusterDict["id"] = bgcName
             clusterDict['start'] = int(cluster.location[0])
@@ -483,6 +498,11 @@ def createJsonFile(clusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict,
             orfs = []
             hitProts = set(prot for prot in cluster)
             for protein in cluster:
+                possibleHits = proteinHits[protein.name]
+                possibleHitPriorities = [hitPriorities[hitQuery] for hitQuery in possibleHits]
+                sortedPossibleHits = sorted(zip(possibleHitPriorities,possibleHits))
+                hitsToConsider = [y for x,y in sortedPossibleHits if x==sortedPossibleHits[0][0]]
+
                 proteinDict = dict()
                 proteinDict['id'] = protein.name
                 proteinDict['start'] = protein.location[0][0] - clusterDict['offset']
@@ -491,35 +511,56 @@ def createJsonFile(clusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict,
                     proteinDict['strand'] = 1
                 else:
                     proteinDict['strand'] = -1
-                ## first check if protein is a hit for an HMM Request
-                if any(protein.hit_dict['blast'].get(blastHit) for blastHit in requiredBlast):
-                    for blastHit in requiredBlast:
-                        hits = sorted([(blastHit, protein.hit_dict['blast'].get(blastHit) / selfScoreDict[blastHit]) for
-                                       protein in (hitDict[blastHit] & hitProts)], key=lambda x: x[1], reverse=True)
-                        proteinDict['hitName'] = [hits[0][0]]
-                        proteinDict['blastHitScore'] = round(hits[0][1], 3)
-                        proteinDict['color'] = hitColorDict[hits[0][0]]
-                elif any(protein.hit_dict['blast'].get(blastHit) for blastHit in optionalBlast):
-                    for blastHit in optionalBlast:
-                        hits = sorted([(blastHit, protein.hit_dict['blast'].get(blastHit) / selfScoreDict[blastHit]) for
-                                       protein in (hitDict[blastHit] & hitProts)], key=lambda x: x[1], reverse=True)
-                        proteinDict['hitName'] = [hits[0][0]]
-                        proteinDict['blastHitScore'] = round(hits[0][1], 3)
-                        proteinDict['color'] = hitColorDict[hits[0][0]]
+                # if there's no tie in priority use it immediately
+                proteinDict['hitName'] = map(lambda x: str(x),possibleHits)
+                if len(hitsToConsider) == 1:
+                    queryHit = hitsToConsider[0]
+                    ## Add distance information if BLAST Hit
+                    if queryHit in requiredBlast or hitsToConsider[0] in optionalBlast:
+                        proteinDict['blastHitScore'] = round(protein.hit_dict['blast'].get(queryHit)
+                                                             / selfScoreDict[queryHit], 3)
+                    proteinDict['color'] = hitColorDict[queryHit]
+                ## if there are multiple possibilities check for assignments
                 else:
-                    for hmmQuery in requiredHMM:
-                        hmmHitProts = hitDict[hmmQuery]
-                        if protein in hmmHitProts:
-                            proteinDict.setdefault('hitName',[])
-                            proteinDict['hitName'].append(str(hmmQuery))
-                            proteinDict['color'] = hitColorDict[hmmQuery]
-                    for hmmQuery in optionalHMM:
-                        hmmHitProts = hitDict[hmmQuery]
-                        if protein in hmmHitProts and 'hitName' not in proteinDict:
-                            proteinDict.setdefault('hitName',[])
-                            proteinDict['hitName'].append(str(hmmQuery))
-                            proteinDict['color'] = hitColorDict[hmmQuery]
-                            proteinDict['color'] = hitColorDict[hmmQuery]
+                    ## Add distance information if BLAST Hit
+                    for queryHit in hitsToConsider:
+                        if queryHit in requiredBlast or hitsToConsider[0] in optionalBlast:
+                            proteinDict['blastHitScore'] = round(protein.hit_dict['blast'].get(queryHit)
+                                                                 / selfScoreDict[queryHit], 3)
+                            proteinDict['color'] = hitColorDict[queryHit]
+                            break
+                    else:
+                        queryHit = hitsToConsider[0]
+                        proteinDict['color'] = hitColorDict[queryHit]
+                ## first check if protein is a hit for an HMM Request
+                # if any(protein.hit_dict['blast'].get(blastHit) for blastHit in requiredBlast):
+                #     for blastHit in requiredBlast:
+                #         hits = sorted([(blastHit, protein.hit_dict['blast'].get(blastHit) / selfScoreDict[blastHit]) for
+                #                        protein in (hitDict[blastHit] & hitProts)], key=lambda x: x[1], reverse=True)
+                #         proteinDict['hitName'] = [hits[0][0]]
+                #         proteinDict['blastHitScore'] = round(hits[0][1], 3)
+                #         proteinDict['color'] = hitColorDict[hits[0][0]]
+                # elif any(protein.hit_dict['blast'].get(blastHit) for blastHit in optionalBlast):
+                #     for blastHit in optionalBlast:
+                #         hits = sorted([(blastHit, protein.hit_dict['blast'].get(blastHit) / selfScoreDict[blastHit]) for
+                #                        protein in (hitDict[blastHit] & hitProts)], key=lambda x: x[1], reverse=True)
+                #         proteinDict['hitName'] = [hits[0][0]]
+                #         proteinDict['blastHitScore'] = round(hits[0][1], 3)
+                #         proteinDict['color'] = hitColorDict[hits[0][0]]
+                # else:
+                #     for hmmQuery in requiredHMM:
+                #         hmmHitProts = hitDict[hmmQuery]
+                #         if protein in hmmHitProts:
+                #             proteinDict.setdefault('hitName',[])
+                #             proteinDict['hitName'].append(str(hmmQuery))
+                #             proteinDict['color'] = hitColorDict[hmmQuery]
+                #     for hmmQuery in optionalHMM:
+                #         hmmHitProts = hitDict[hmmQuery]
+                #         if protein in hmmHitProts and 'hitName' not in proteinDict:
+                #             proteinDict.setdefault('hitName',[])
+                #             proteinDict['hitName'].append(str(hmmQuery))
+                #             proteinDict['color'] = hitColorDict[hmmQuery]
+                #             proteinDict['color'] = hitColorDict[hmmQuery]
 
                 if 'color' not in proteinDict:
                     proteinDict['color'] = 'rgb(211,211,211)'
@@ -542,15 +583,15 @@ def createJsonFile(clusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict,
                 try:
                     clusterProtIdxs = range(cluster[0].idx,cluster[-1].idx+1)
                     species = cluster.species
-                    print(species)
-                    print(clusterProtIdxs)
+                    # print(species)
+                    # print(clusterProtIdxs)
                     hitIdxs = set(x.idx for x in hitProts)
-                    print(hitIdxs)
+                    # print(hitIdxs)
                     for geneIdx in clusterProtIdxs:
                         if geneIdx not in hitIdxs:
                             speciesIdx = geneIdxDict.get(species,[])
                             if speciesIdx:
-                                print(species,geneIdx)
+                                # print(species,geneIdx)
                                 start,end,direction = speciesIdx[geneIdx-1]
                                 proteinDict = {}
                                 proteinDict['start'] = start - clusterDict['offset']
@@ -562,7 +603,7 @@ def createJsonFile(clusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict,
                                 proteinDict['color'] = 'rgb(155,155,155)'
                                 orfs.append(proteinDict)
                 except Exception as e:
-                    print(e)
+                    # print(e)
                     pass
             clusterDict['orfs'] = orfs
             ct_data.append(clusterDict)

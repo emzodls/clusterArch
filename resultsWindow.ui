@@ -76,6 +76,19 @@
        </property>
       </widget>
      </item>
+     <item>
+      <widget class="QPushButton" name="viewHTMLvisBtn">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="text">
+        <string>View HTML Visualization</string>
+       </property>
+      </widget>
+     </item>
      <item alignment="Qt::AlignRight">
       <widget class="QPushButton" name="closeBtn">
        <property name="enabled">
