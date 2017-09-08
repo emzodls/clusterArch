@@ -26,10 +26,11 @@ from Bio.Seq import Seq
 from Bio.Alphabet import generic_protein,generic_dna
 from clusterTools import clusterAnalysis,clusterGraphics
 from random import random
-import sys,subprocess,os,platform
+import subprocess,os,platform
 import gzip,re,urllib
 from pickle import dump,load
-from random import randint
+from copy import deepcopy
+from collections import Counter
 
 ### To fix the file paths in windows ###
 # from http://stackoverflow.com/questions/23598289/how-to-get-windows-short-file-name-in-python
@@ -413,6 +414,34 @@ def processSearchListCluster(requiredBlastList,requiredHmmList,selfBlastFile,bla
         for hmm in hmms:
             hmmQuerys.add(hmm)
     return filteredClusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict
+
+def processSearchListClusterAssign(cluster,hitDict,blastLists,hmmLists):
+    # Gather all of the proteins, might be a memory issue...code memory friendly version with sequential filters (?)
+    requiredBlast,optionalBlast = blastLists
+    requiredHMM,optionalHMM = hmmLists
+    requiredHitsToAssign = deepcopy(requiredBlast+requiredHMM)
+    additionalHits = deepcopy(optionalBlast+optionalHMM)
+    proteinHits = dict()
+    hitQueryProtein = dict()
+
+    ## Get possible assignments for each of the proteins
+    for protein in cluster:
+        proteinHitList = proteinHits.setdefault(protein.name,[])
+        hitQueryList = hitQueryProtein.setdefault()
+        for hitQuery,hitSet in hitDict.items():
+            hitQueryList = hitQueryProtein.setdefault(hitQuery,[])
+            if protein in hitSet:
+                proteinHitList.append(hitQuery)
+                hitQueryList.append(protein.name)
+
+    ## if there is only hit for something required assign those immediately
+    hitAssignments = []
+    unassignedProteins = set(x.name for x in cluster)
+    while requiredHitsToAssign:
+        uniqueHits = [hit for hit in requiredHitsToAssign if len(hitQueryProtein[hit]) == 1]
+        for hit in uniqueHits:
+            hitAssignments.append((hitQueryProtein[hit][0].name,hit))
+            unassignedProteins.remove(hitQueryProtein[hit][0].name)
 
 def createJsonFile(clusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict,geneIdxFile=None):
     '''
