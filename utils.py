@@ -336,7 +336,8 @@ def processSearchListOptionalHits(requiredBlastList,requiredHmmList,selfBlastFil
 
 def processSearchListClusterJson(requiredBlastList,requiredHmmList,selfBlastFile,blastOutFile,blastEval,
                                   hmmOutFile,hmmScore, hmmDomLen,
-                                  windowSize,totalHitsRequired,additionalBlastList=[],additionalHmmList=[],jsonOutput=False):
+                                  windowSize,totalHitsRequired,additionalBlastList=[],additionalHmmList=[],
+                                 jsonOutput=False,geneIdxFile=None):
     # Gather all of the proteins, might be a memory issue...code memory friendly version with sequential filters (?)
     prots = dict()
     if requiredBlastList or additionalBlastList:
@@ -427,7 +428,7 @@ def processSearchListClusterJson(requiredBlastList,requiredHmmList,selfBlastFile
         for hmms in requiredHmmList+ additionalHmmList:
             for hmm in hmms:
                 hmmQuerys.add(hmm)
-        jsonFile = createJsonFile(filteredClusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict)
+        jsonFile = createJsonFile(filteredClusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict,geneIdxFile=geneIdxFile)
     else:
         jsonFile = ''
 
@@ -967,5 +968,5 @@ def generateCtDBIdxFile(ctDB,outfile):
 
     return
 if __name__ == "__main__":
-    os.chdir('/Volumes/Data/clusterToolsDB/genomesRS')
-    generateCtDBIdxFile('archBactProtMeta.clusterToolDB.fasta', 'archBactProtMeta.db')
+    os.chdir('/Volumes/Data/clusterToolsDB/mibig')
+    generateCtDBIdxFile('mibig13CDS.fasta', 'mibig13CDS.ctDB.idx')

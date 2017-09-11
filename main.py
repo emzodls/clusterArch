@@ -28,7 +28,7 @@ from PyQt5 import QtGui
 from PyQt5.QtWidgets import (QApplication, QFileDialog, QMainWindow,
         QMessageBox,QTableWidgetItem,QWidget,QListWidgetItem)
 from utils import parseSeqFile,parseHMMfile,generateInputFasta,generateHMMdb,MakeBlastDB,runBLAST,runBLASTself,\
-    runHmmsearch,proccessGbks,processSearchListOptionalHits,humanbytes,processGbkDivFile,\
+    runHmmsearch,proccessGbks,humanbytes,processGbkDivFile,\
     ncbiGenomeFastaParser,fastaDictToSeqRecs,writeSeqRecs,runHmmCheck,runHmmBuild,generateCtDBIdxFile,processSearchListClusterJson
 from collections import Counter
 from glob import iglob,glob
@@ -422,7 +422,7 @@ class runProcessSearchListOptionalHits(QObject):
     result = pyqtSignal(tuple)
     def __init__(self,requiredBlastList,requiredHmmList,selfBlastFile,blastOutFile,blastEval,
                  hmmOutFile,hmmScore,hmmDomLen,
-                 windowSize,totalHitsRequired, additionalBlastList=[], additionalHmmList=[]):
+                 windowSize,totalHitsRequired, additionalBlastList=[], additionalHmmList=[],geneIdxFile=None):
         self.requiredBlastList = requiredBlastList
         self.requiredHmmList = requiredHmmList
 
@@ -439,7 +439,7 @@ class runProcessSearchListOptionalHits(QObject):
         self.windowSize = windowSize
 
         self.totalHitsRequired = totalHitsRequired
-
+        self.geneIdxFile = geneIdxFile
 
         super(runProcessSearchListOptionalHits, self).__init__()
     @pyqtSlot()
@@ -449,7 +449,8 @@ class runProcessSearchListOptionalHits(QObject):
         output = processSearchListClusterJson(self.requiredBlastList, self.requiredHmmList,
                                                          self.selfBlastFile,self.blastOutFile, self.blastEval,
                                                          self.hmmOutFile,self.hmmScore,self.hmmDomLen,self.windowSize,
-                                                         self.totalHitsRequired,self.additionalBlastList,self.additionalHmmList,jsonOutput=True)
+                                                         self.totalHitsRequired,self.additionalBlastList,self.additionalHmmList,
+                                              jsonOutput=True,geneIdxFile=self.geneIdxFile)
         self.result.emit(output)
 
 class exportSelectedGbWorker(QObject):
@@ -2411,6 +2412,18 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 if not self.runnerThread:
                     self.runnerThread = QThread()
                 self.runnerThread.start()
+                ### check if there is an existing idx file
+                dbPath,dbName = os.path.split(self.pathToDatabase)
+                print(self.pathToDatabase)
+                baseName,ext = os.path.splitext(dbName)
+                print('Checking',os.path.join(dbPath,baseName +'.ctDB.idx'),os.path.join(self.outputDir,baseName + '.ctDB.idx'))
+                if os.path.isfile(os.path.join(dbPath,baseName + '.ctDB.idx')):
+                    dbIdxFile = os.path.join(dbPath,baseName + '.ctDB.idx')
+                elif os.path.isfile(os.path.join(self.outputDir,baseName,'.ctDB.idx')):
+                    dbIdxFile = os.path.join(self.outputDir,baseName,'.ctDB.idx')
+                else:
+                    dbIdxFile = None
+                print(dbIdxFile)
                 self.processSearchListWorker = runProcessSearchListOptionalHits(requiredBlastList,requiredHmmList,
                                                                                 selfBlastFile,blastOutFile,
                                                                                     self.nameToParamDict['blastEval'],
@@ -2419,7 +2432,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                                                                                     self.nameToParamDict['hmmDomLen'],
                                                                                     self.nameToParamDict['windowSize'],
                                                                                     self.totalHitsRequired,
-                                                                                    optionalBlastList,optionalHmmList)
+                                                                                    optionalBlastList,optionalHmmList,geneIdxFile=dbIdxFile)
                 self.processSearchListWorker.result.connect(
                         lambda x: self.generateResults(x, self.statusWin,requiredBlastList+optionalBlastList,
                                                        requiredHmmList+optionalHmmList))
