@@ -1,23 +1,25 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title>clusterTools Summary</title>
-    <link rel="stylesheet" type="text/css" href="css/bootstrap.min.css">
+    <link rel="stylesheet" type="text/css" href="css/style.css">
   </head>
   <body>
-    <div class="container-fluid" id='container'>
+    <div id='container'>
   </body>
   <!-- javascripts -->
   <script type="text/javascript" src="js/jquery-3.2.1.min.js"></script>
-    <script type="text/javascript" src="js/popper.min.js"></script>
-      <script type="text/javascript" src="js/bootstrap.min.js"></script>
   <script type="text/javascript" src="js/svg.js"></script>
   <script type="text/javascript" src="js/arrower.js"></script>
   <script type="text/javascript" src="js/ctvis.js"></script>
-  <script type="text/javascript" src="test_idx.js"></script>
+  <script type="text/javascript" src="output.cTools.js"></script>
   <script type="text/javascript">
+    function random(min, max) {
+      min = Math.ceil(min);
+      max = Math.floor(max);
+      return Math.floor(Math.random() * (max - min)) + min;
+    }
+    pfam_all = {};
     $(document).ready(function(){
       var bs = new ct(ct_data, ct_scale,hits,hit_colors,hmms,hmm_colors,"container");
     });

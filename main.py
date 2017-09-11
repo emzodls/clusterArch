@@ -1611,6 +1611,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         else:
             summaryFile['HMMer'] = []
             summaryFile['hmmerOut'] = None
+
         dump(summaryFile,open(os.path.join(self.outputDir,self.searchName,'{}.clusterTools.summary'.format(self.searchName)),'wb'))
 
     def updateLastSearch(self):
@@ -1829,21 +1830,22 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.resultsWin.selectGbkExportDirBtn.clicked.connect(self.selectGbkExportDir)
         self.resultsWin.exportSelectedGbkBtn.clicked.connect(self.exportSelectedGbk)
         ## If json file exists enable button for visualization
-        jsonOutFile = os.path.join(self.outputDir, '{}.js'.format(self.searchName))
+        jsonOutFile = os.path.join(self.outputDir, '{}.cTools.js'.format(self.searchName))
         if os.path.isfile(jsonOutFile):
             self.resultsWin.viewHTMLvisBtn.setEnabled(True)
             self.resultsWin.viewHTMLvisBtn.clicked.connect(self.showHTML)
+            if not os.path.isdir(os.path.join(self.outputDir, 'htmlvis')):
+                shutil.copytree(os.path.join(self.runDir, 'htmlvis'), os.path.join(self.outputDir, 'htmlvis'))
+            else:
+                shutil.rmtree(os.path.join(self.outputDir, 'htmlvis'))
+                shutil.copytree(os.path.join(self.runDir, 'htmlvis'), os.path.join(self.outputDir, 'htmlvis'))
+            jsonOutFile = os.path.join(self.outputDir, '{}.cTools.js'.format(self.searchName))
+            shutil.copy2(jsonOutFile, os.path.join(self.outputDir, 'htmlvis', 'output.cTools.js'))
+            webbrowser.open(os.path.join(self.outputDir, 'htmlvis', 'output.cTools.html'))
         self.resultsWin.show()
 
     def showHTML(self):
-        if not os.path.isdir(os.path.join(self.outputDir,'htmlvis')):
-            shutil.copytree(os.path.join(self.runDir,'htmlvis'),os.path.join(self.outputDir,'htmlvis'))
-        else:
-            shutil.rmtree(os.path.join(self.outputDir,'htmlvis'))
-            shutil.copytree(os.path.join(self.runDir, 'htmlvis'), os.path.join(self.outputDir, 'htmlvis'))
-        jsonOutFile = os.path.join(self.outputDir, '{}.js'.format(self.searchName))
-        shutil.copy2(jsonOutFile,os.path.join(self.outputDir,'htmlvis','test_idx.js'))
-        webbrowser.open(os.path.join(self.outputDir,'htmlvis','test_ct.html'))
+        webbrowser.open(os.path.join(self.outputDir,'htmlvis','output.cTools.html'))
 
     def selectAllResults(self):
         for idx in range(self.resultsWin.resultsList.rowCount()):
@@ -1941,10 +1943,21 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                     rowData[0] = '##' + rowData[0]
                     writer.writerow(rowData)
 
+
                     for rowIdx in range(self.resultsWin.resultsList.rowCount()):
                         rowData = [self.resultsWin.resultsList.item(rowIdx, colIdx).text().strip()
                                    for colIdx in range(1,self.resultsWin.resultsList.columnCount())]
                         writer.writerow(rowData)
+                ### if there is a json file include html output folder
+                jsonOutFile = os.path.join(self.outputDir, '{}.cTools.js'.format(self.searchName))
+                if os.path.isfile(jsonOutFile):
+                    htmlOutputPath = os.path.join(path,os.path.splitext(fileName)[0]+ '-html')
+                    if not os.path.isdir(htmlOutputPath):
+                        shutil.copytree(os.path.join(self.runDir, 'htmlvis'), htmlOutputPath)
+                    else:
+                        shutil.rmtree(htmlOutputPath)
+                        shutil.copytree(os.path.join(self.runDir, 'htmlvis'), htmlOutputPath)
+                    shutil.copy2(jsonOutFile, os.path.join(htmlOutputPath, 'output.cTools.js'))
             else:
                 msg = QMessageBox()
                 msg.setIcon(QMessageBox.Critical)
@@ -2426,12 +2439,13 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                                      '6/6', 6)
             statusWin.viewResultsBtn.setEnabled(True)
             statusWin.viewResultsBtn.clicked.connect(lambda: self.showResultsWindow(statusWin,blastList,hmmList,filteredClusters))
-            jsonOutFile = os.path.join(self.outputDir, '{}.js'.format(self.searchName))
-            if json != '':
+            jsonOutFile = os.path.join(self.outputDir, '{}.cTools.js'.format(self.searchName))
+            if json != '' and os.access(self.outputDir,os.W_OK):
                 with open(jsonOutFile,'w') as outfile:
                     outfile.write(json)
             if self.runnerThread:
                 self.runnerThread.terminate()
+
         else:
             self.updateStatusWinText(statusWin, 'Search Complete: No Results Found',
                                      '6/6', 6)
@@ -2669,7 +2683,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                     hmmCheck = True
                 else:
                     hmmCheck = False
-
+                self.outputDir = resultsFilePath
                 if hmmCheck and blastCheck:
                     #### reinitialize savedSearch
                     self.maxEvals['blastEval'] = float(self.SavedResultSummary['blastEval'])
@@ -2951,9 +2965,11 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
     def cleanFiles(self):
         foldersToCheck = [self.outputDirectorySelector.itemText(idx) for idx in range(self.outputDirectorySelector.count())
                           if 'Select Directory...' not in self.outputDirectorySelector.itemText(idx)]
+        if self.outputDir != self.runDir:
+            foldersToCheck.append(self.outputDir)
         filesToDelete = []
         extensionsToCheck = ['*_blast_results.out','*_gene_queries.fa','*_hmmDB.hmm','*_hmmSearch.out',
-                             '*_gene_queries.fa.*']
+                             '*_gene_queries.fa.*','*.cTools.js','*.cTools.html']
         for folder in foldersToCheck:
             for extension in extensionsToCheck:
                 filesToDelete.extend(glob(os.path.join(folder,extension)))
@@ -2963,6 +2979,10 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         for tmpFile in filesToDelete:
             if os.path.isfile(tmpFile):
                 os.remove(tmpFile)
+        htmlVisFolders = [os.path.join(folder,'htmlvis') for folder in foldersToCheck]
+        for htmlVisFolder in htmlVisFolders:
+            if os.path.isdir(htmlVisFolder):
+                shutil.rmtree(htmlVisFolder)
 
 
 def main():
