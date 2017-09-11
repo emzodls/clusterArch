@@ -21,7 +21,7 @@ build_exe_options = {"packages": [],
 if sys.platform == "win32":
     build_exe_options['include_msvcr'] = True
 setup(  name = "clusterTools",
-        version = "0.1",
+        version = "0.2",
         description = "BGC cluster analysis",
         options = {"build_exe": build_exe_options},
         executables = [Executable("main.py", base=base,icon='icon.ico')])
