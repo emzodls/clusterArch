@@ -9,11 +9,11 @@ from cx_Freeze import setup, Executable
 base = None
 if sys.platform == "win32":
     base = "Win32GUI"
-    includefiles = glob('winDeps/*') + ['testHMM.fasta']
+    includefiles = glob('winDeps/*') + ['testHMM.fasta','htmlvis']
 if sys.platform == "darwin":
-    includefiles = glob('macDeps/*') + ['testHMM.fasta']
+    includefiles = glob('macDeps/*') + ['testHMM.fasta','htmlvis']
 if sys.platform == "linux":
-    includefiles = glob('linuxDeps/*') + ['testHMM.fasta']
+    includefiles = glob('linuxDeps/*') + ['testHMM.fasta','htmlvis']
 # Dependencies are automatically detected, but it might need fine tuning.
 build_exe_options = {"packages": [],
                      "excludes": ["tkinter","BioSQL","Bio.PDB","Bio.Nexus","Bio.SwissProt","BioSQL.BioSeq","Bio.AlignIO"],
