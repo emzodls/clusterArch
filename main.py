@@ -21,7 +21,7 @@
     along with clusterTools.  If not, see <http://www.gnu.org/licenses/>.
 '''
 
-import os,csv,urllib,gzip,platform
+import os,csv,urllib,gzip,platform,shutil,webbrowser
 from PyQt5.QtCore import (QRegularExpression,
         Qt,QThread,pyqtSignal,pyqtSlot,QObject)
 from PyQt5 import QtGui
@@ -1828,7 +1828,22 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.resultsWin.exportSummaryResultsBtn.clicked.connect(self.exportResultsSummary)
         self.resultsWin.selectGbkExportDirBtn.clicked.connect(self.selectGbkExportDir)
         self.resultsWin.exportSelectedGbkBtn.clicked.connect(self.exportSelectedGbk)
+        ## If json file exists enable button for visualization
+        jsonOutFile = os.path.join(self.outputDir, '{}.js'.format(self.searchName))
+        if os.path.isfile(jsonOutFile):
+            self.resultsWin.viewHTMLvisBtn.setEnabled(True)
+            self.resultsWin.viewHTMLvisBtn.clicked.connect(self.showHTML)
         self.resultsWin.show()
+
+    def showHTML(self):
+        if not os.path.isdir(os.path.join(self.outputDir,'htmlvis')):
+            shutil.copytree(os.path.join(self.runDir,'htmlvis'),os.path.join(self.outputDir,'htmlvis'))
+        else:
+            shutil.rmtree(os.path.join(self.outputDir,'htmlvis'))
+            shutil.copytree(os.path.join(self.runDir, 'htmlvis'), os.path.join(self.outputDir, 'htmlvis'))
+        jsonOutFile = os.path.join(self.outputDir, '{}.js'.format(self.searchName))
+        shutil.copy2(jsonOutFile,os.path.join(self.outputDir,'htmlvis','test_idx.js'))
+        webbrowser.open(os.path.join(self.outputDir,'htmlvis','test_ct.html'))
 
     def selectAllResults(self):
         for idx in range(self.resultsWin.resultsList.rowCount()):
@@ -2411,13 +2426,12 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                                      '6/6', 6)
             statusWin.viewResultsBtn.setEnabled(True)
             statusWin.viewResultsBtn.clicked.connect(lambda: self.showResultsWindow(statusWin,blastList,hmmList,filteredClusters))
-            jsonOutFile = os.path.join(self.outputDir, '{}.json'.format(self.searchName))
+            jsonOutFile = os.path.join(self.outputDir, '{}.js'.format(self.searchName))
             if json != '':
                 with open(jsonOutFile,'w') as outfile:
                     outfile.write(json)
             if self.runnerThread:
                 self.runnerThread.terminate()
-
         else:
             self.updateStatusWinText(statusWin, 'Search Complete: No Results Found',
                                      '6/6', 6)
