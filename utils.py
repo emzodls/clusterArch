@@ -390,7 +390,10 @@ def processSearchListClusterJson(requiredBlastList,requiredHmmList,selfBlastFile
 
     additionalBlastHitDict = dict()
     additionalHmmHitDict = dict()
-    selfScoreDict = processSelfBlastScore(selfBlastFile)
+    if requiredBlastList or additionalBlastList:
+        selfScoreDict = processSelfBlastScore(selfBlastFile)
+    else:
+        selfScoreDict = dict()
 
     if requiredBlastList:
         requiredBlastHitDict = {hitName:set(protein for protein in prots.values() if hitName in protein.hit_dict['blast'].hits)
@@ -1008,5 +1011,5 @@ def generateCtDBIdxFile(ctDB,outfile):
 
     return
 if __name__ == "__main__":
-    os.chdir('/Volumes/Data/clusterToolsDB/mibig')
+    os.chdir('/Volumes/lab_data/clusterToolsFiles/mibig/')
     generateCtDBIdxFile('mibig13CDS.fasta', 'mibig13CDS.ctDB.idx')

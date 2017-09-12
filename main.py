@@ -1821,8 +1821,9 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 self.resultsWin.resultsList.setItem(currentRowCount, idx + 6,
                                     QTableWidgetItem('; '.join(hit[0] for hit in sortedList)))
             for idx, hmmHit in enumerate(hmmList):
+                hitList = hitDict.get(hmmHit,[])
                 self.resultsWin.resultsList.setItem(currentRowCount, idx + len(blastList) + 6,
-                                              QTableWidgetItem('; '.join(hit[0] for hit in sortedList)))
+                                              QTableWidgetItem('; '.join(hit[0] for hit in hitList)))
             self.resultsWin.resultsList.setItem(currentRowCount,5,
                                                 QTableWidgetItem('{0:.4f}'.format(blastScore)))
         self.resultsWin.resultsList.resizeColumnsToContents()
@@ -2947,6 +2948,16 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                                          % (self.nameToSavedParamDict['hmmScore'], self.nameToSavedParamDict['hmmDomLen'],
                                             self.nameToSavedParamDict['windowSize']),
                                          '5/6', 5)
+
+                dbPath, dbName = os.path.split(self.SavedResultSummary['db'])
+                baseName,ext = os.path.splitext(dbName)
+                print('Checking',os.path.join(dbPath,baseName +'.ctDB.idx'),os.path.join(self.outputDir,baseName + '.ctDB.idx'))
+                if os.path.isfile(os.path.join(dbPath,baseName + '.ctDB.idx')):
+                    dbIdxFile = os.path.join(dbPath,baseName + '.ctDB.idx')
+                elif os.path.isfile(os.path.join(self.outputDir,baseName,'.ctDB.idx')):
+                    dbIdxFile = os.path.join(self.outputDir,baseName,'.ctDB.idx')
+                else:
+                    dbIdxFile = None
                 if not self.runnerThread:
                     self.runnerThread = QThread()
                 self.runnerThread.start()
@@ -2958,7 +2969,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                                                                                 self.nameToSavedParamDict['hmmDomLen'],
                                                                                 self.nameToSavedParamDict['windowSize'],
                                                                                 self.savedTotalHitsRequired,
-                                                                                optionalBlastList, optionalHmmList)
+                                                                                optionalBlastList, optionalHmmList,geneIdxFile=dbIdxFile)
                 self.processSearchListWorker.result.connect(
                     lambda x: self.generateResults(x, self.savedSearchstatusWin, requiredBlastList + optionalBlastList,
                                                    requiredHmmList + optionalHmmList,savedSearch=True))
@@ -2978,6 +2989,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
     def cleanFiles(self):
         foldersToCheck = [self.outputDirectorySelector.itemText(idx) for idx in range(self.outputDirectorySelector.count())
                           if 'Select Directory...' not in self.outputDirectorySelector.itemText(idx)]
+        foldersToCheck = [folder for folder in foldersToCheck if folder != self.runDir]
         if self.outputDir != self.runDir:
             foldersToCheck.append(self.outputDir)
         filesToDelete = []
