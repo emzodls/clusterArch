@@ -539,6 +539,8 @@ def createJsonFile(clusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict,
             clusterDict['end'] = int(cluster.location[1])
             clusterDict['offset'] = int(cluster[0].location[0][0]) - 1
             clusterDict['size'] = int(cluster.size())
+            similarityScore = 0
+            blastHits = 0
             orfs = []
             hitProts = set(prot for prot in cluster)
             for protein in cluster:
@@ -560,17 +562,23 @@ def createJsonFile(clusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict,
                 if len(hitsToConsider) == 1:
                     queryHit = hitsToConsider[0]
                     ## Add distance information if BLAST Hit
-                    if queryHit in requiredBlast or hitsToConsider[0] in optionalBlast:
-                        proteinDict['blastHitScore'] = round(protein.hit_dict['blast'].get(queryHit)
-                                                             / selfScoreDict[queryHit], 3)
+                    if queryHit in requiredBlast or queryHit in optionalBlast:
+                        blastHitScore = round(protein.hit_dict['blast'].get(queryHit)
+                                              / selfScoreDict[queryHit], 3)
+                        proteinDict['blastHitScore'] = blastHitScore
+                        similarityScore += blastHitScore
+                        blastHits += 1
                     proteinDict['color'] = hitColorDict[queryHit]
                 ## if there are multiple possibilities check for assignments
                 else:
                     ## Add distance information if BLAST Hit
                     for queryHit in hitsToConsider:
-                        if queryHit in requiredBlast or hitsToConsider[0] in optionalBlast:
-                            proteinDict['blastHitScore'] = round(protein.hit_dict['blast'].get(queryHit)
+                        if queryHit in requiredBlast or queryHit in optionalBlast:
+                            blastHitScore = round(protein.hit_dict['blast'].get(queryHit)
                                                                  / selfScoreDict[queryHit], 3)
+                            proteinDict['blastHitScore'] = blastHitScore
+                            similarityScore += blastHitScore
+                            blastHits += 1
                             proteinDict['color'] = hitColorDict[queryHit]
                             break
                     else:
@@ -650,12 +658,16 @@ def createJsonFile(clusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict,
                     # print(e)
                     pass
             clusterDict['orfs'] = orfs
+            clusterDict['similarityScore'] = round(similarityScore,2)
+            clusterDict['blastHits'] = blastHits
             ct_data.append(clusterDict)
             hits = [hit for hit in hitColorDict.keys()]
             hit_colors = [hitColorDict[hit] for hit in hits]
             hits = [str(hit) for hit in hits]
             hmms = [str(hit) for hit in hmmColors.keys()]
             hmm_colors = [hmmColors[hmm] for hmm in hmms]
+    # arrange by similarity score
+    ct_data.sort(reverse=True,key=lambda cluster:cluster['similarityScore'])
     return 'var ct_scale = {}\nvar ct_data={}\nvar hits={}\nvar hit_colors={}\nvar hmms={}\nvar hmm_colors={}'.format(int(biggestCluster),
                                                                                               str(ct_data),
                                                                                               str(hits),
