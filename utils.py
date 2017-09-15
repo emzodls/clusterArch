@@ -186,9 +186,13 @@ def MakeBlastDB(makeblastdbExec,dbPath,outputDir,outDBName):
 
 def runBLASTself(blastExec,inputFastas,outputDir,searchName,eValue='1E-05'):
     if platform.system() == 'Windows':
+        path, outputDBname = os.path.split(inputFastas)
+        dbPath = os.path.join(get_short_path_name(path),outputDBname)
         inputFastas = get_short_path_name(inputFastas)
         outputDir = get_short_path_name(outputDir)
-    command = [blastExec, "-db", inputFastas, "-query", inputFastas, "-outfmt", "6", "-max_target_seqs", "10000", "-max_hsps", '1',
+    else:
+        dbPath = inputFastas
+    command = [blastExec, "-db", dbPath, "-query", inputFastas, "-outfmt", "6", "-max_target_seqs", "10000", "-max_hsps", '1',
                "-evalue", eValue, "-out", os.path.join(outputDir,"{}_self_blast_results.out".format(searchName))]
     out, err, retcode = execute(command)
     if retcode != 0:
@@ -1023,5 +1027,5 @@ def generateCtDBIdxFile(ctDB,outfile):
 
     return
 if __name__ == "__main__":
-    os.chdir('/Volumes/lab_data/clusterToolsFiles/mibig/')
-    generateCtDBIdxFile('mibig13CDS.fasta', 'mibig13CDS.ctDB.idx')
+    os.chdir('/Volumes/Data/lola_latest_assemblies/clusterToolsDB')
+    generateCtDBIdxFile('lola_allCDS.fasta', 'lola_allCDS.ctDB.idx')
