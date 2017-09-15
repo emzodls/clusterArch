@@ -1843,11 +1843,17 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 shutil.copytree(os.path.join(self.runDir, 'htmlvis'), os.path.join(self.outputDir, 'htmlvis'))
             jsonOutFile = os.path.join(self.outputDir, '{}.cTools.js'.format(self.searchName))
             shutil.copy2(jsonOutFile, os.path.join(self.outputDir, 'htmlvis', 'output.cTools.js'))
-            webbrowser.open(os.path.join(self.outputDir, 'htmlvis', 'output.cTools.html'))
+            if platform == "darwin":
+                webbrowser.open('file:///'+ os.path.join(self.outputDir, 'htmlvis', 'output.cTools.html'))
+            else:
+                webbrowser.open(os.path.join(self.outputDir, 'htmlvis', 'output.cTools.html'))
         self.resultsWin.show()
 
     def showHTML(self):
-        webbrowser.open(os.path.join(self.outputDir,'htmlvis','output.cTools.html'))
+        if platform == "darwin":
+            webbrowser.open('file:///' + os.path.join(self.outputDir, 'htmlvis', 'output.cTools.html'))
+        else:
+            webbrowser.open(os.path.join(self.outputDir,'htmlvis','output.cTools.html'))
 
     def selectAllResults(self):
         for idx in range(self.resultsWin.resultsList.rowCount()):
