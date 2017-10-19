@@ -1027,5 +1027,5 @@ def generateCtDBIdxFile(ctDB,outfile):
 
     return
 if __name__ == "__main__":
-    os.chdir('/Volumes/Data/lola_latest_assemblies/clusterToolsDB')
-    generateCtDBIdxFile('lola_allCDS.fasta', 'lola_allCDS.ctDB.idx')
+    os.chdir('/Volumes/lab_data/antismash/mmyR_strains_tractable_ctDB')
+    generateCtDBIdxFile('antismash.fasta', 'antismash.ctDB.idx')
