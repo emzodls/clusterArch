@@ -468,7 +468,7 @@ def processSearchListClusterJson(requiredBlastList,requiredHmmList,selfBlastFile
                             [(protein.name, None) for
                              protein in (hitSet & clusterProts)]
 
-    if jsonOutput:
+    if jsonOutput and filteredClusters:
         blastLists = (set(requiredBlastList),set(additionalBlastList))
         hmmLists = (set(requiredHmmList),set(additionalHmmList))
         hmmQuerys = set()
@@ -1027,5 +1027,5 @@ def generateCtDBIdxFile(ctDB,outfile):
 
     return
 if __name__ == "__main__":
-    os.chdir('/Volumes/lab_data/antismash/mmyR_strains_tractable_ctDB')
-    generateCtDBIdxFile('antismash.fasta', 'antismash.ctDB.idx')
+    os.chdir('/Volumes/Theme2/clusterToolsDatabases/mibig')
+    generateCtDBIdxFile('mibig13CDS.fasta', 'mibig13CDS.ctDB.idx')
