@@ -1,5 +1,6 @@
 import string
 from enum import IntEnum
+from clusterTools import clusterAnalysis
 
 class RuleSyntaxError(SyntaxError):
     pass
@@ -286,8 +287,8 @@ class DetectionRule():
             condition_text = condition_text[1:-1]
         return condition_text
 
-class Parser():
-    def __init__(self, text):
+class HmmParser():
+    def __init__(self, text,hmmSet = None):
         self.text = text
 
         self.current_token = None
@@ -305,6 +306,10 @@ class Parser():
             return
         self.rule = self._parse_rule()
 
+        if hmmSet:
+            notInSet = identifiers - hmmSet
+            if notInSet:
+                raise ValueError("Rules contained identifers without signatures: %s" % ", ".join(sorted(list(notInSet))))
         #### Add validity check from HMM list. ########
         # verify gathered signature idenfiers exist as signatures
         # unknown = identifiers - signatures.get_signature_names()
@@ -503,17 +508,22 @@ def prepareRulesByIdDict(hmmResults,cutoff):
     return results_by_id
 
 
-# test = Parser('(minimum(3, [KS_DOMAIN]) and ((KS_DOMAIN and AT_DOMAIN) or (C_DOMAIN and A_DOMAIN) and R_DOMAIN))')
+test = HmmParser('(KS_DOMAIN and AT_DOMAIN) or (C_DOMAIN and A_DOMAIN) and R_DOMAIN',hmmSet={'AT_DOMAIN', 'A_DOMAIN', 'R_DOMAIN', 'C_DOMAIN', 'KS_DOMAIN'})
+
+prots = clusterAnalysis.add_sequences('/Users/emzodls/Dropbox/Lab/Warwick/genomes/mibig/mibig13CDS.fasta',{})
+prots = clusterAnalysis.parse_hmmsearch_domtbl_anot('/Users/emzodls/Dropbox/Lab/Warwick/genomes/mibig/'
+                                                    'mibigNRPS.out',15,'hmm',prots)
+for prot in prots.values():
+    if HmmParser('(KS_DOMAIN and AT_DOMAIN) or (C_DOMAIN and A_DOMAIN) and R_DOMAIN',hmmSet={'AT_DOMAIN', 'A_DOMAIN', 'R_DOMAIN', 'C_DOMAIN', 'KS_DOMAIN'}).rule.condition.is_satisfied(prot):
+        print(prot.name,prot.getDomStr('hmm',';'))
+#test = Tokeniser('transAT	20	20	cds(minimum(2, KS_DOMAIN) and ((KS_DOMAIN and AT_DOMAIN) or (C_DOMAIN and A_DOMAIN) and R_DOMAIN))'.expandtabs())
+#print(test.tokens)
+#print(list(test.tokens)[1:])
+# parser = rule_parser.Parser(open('/Users/emzodls/antismash5/antismash/modules/hmm_detection/test_rule.txt'))
+# results = SearchIO.parse("/Volumes/Data/clusterToolsDB/mibig/mibigNRPS.out",'hmmsearch3-domtab')
+# dummyResultsByID = prepareRulesByIdDict(results,25)
 #
-# print(test.rule)
-# #test = Tokeniser('transAT	20	20	cds(minimum(2, KS_DOMAIN) and ((KS_DOMAIN and AT_DOMAIN) or (C_DOMAIN and A_DOMAIN) and R_DOMAIN))'.expandtabs())
-# #print(test.tokens)
-# #print(list(test.tokens)[1:])
-# # parser = rule_parser.Parser(open('/Users/emzodls/antismash5/antismash/modules/hmm_detection/test_rule.txt'))
-# # results = SearchIO.parse("/Volumes/Data/clusterToolsDB/mibig/mibigNRPS.out",'hmmsearch3-domtab')
-# # dummyResultsByID = prepareRulesByIdDict(results,25)
-# #
-# # for hit in dummyResultsByID:
-# #     details = Details(hit,{hit:'meh'}, dummyResultsByID, 25)
-# #     if parser.rules[0].conditions.is_satisfied(details):
-# #         print(hit)
+# for hit in dummyResultsByID:
+#     details = Details(hit,{hit:'meh'}, dummyResultsByID, 25)
+#     if parser.rules[0].conditions.is_satisfied(details):
+#         print(hit)

@@ -525,8 +525,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>729</width>
-             <height>610</height>
+             <width>710</width>
+             <height>289</height>
             </rect>
            </property>
            <attribute name="label">
@@ -776,8 +776,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>729</width>
-             <height>610</height>
+             <width>499</width>
+             <height>494</height>
             </rect>
            </property>
            <attribute name="label">
@@ -1363,8 +1363,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>729</width>
-             <height>610</height>
+             <width>521</width>
+             <height>259</height>
             </rect>
            </property>
            <attribute name="label">
@@ -1804,7 +1804,7 @@
              </layout>
             </item>
             <item>
-             <layout class="QHBoxLayout" name="horizontalLayout_12" stretch="1">
+             <layout class="QHBoxLayout" name="horizontalLayout_12" stretch="0">
               <item>
                <widget class="QListWidget" name="hmmList">
                 <property name="sizePolicy">
@@ -1834,7 +1834,7 @@
                  </sizepolicy>
                 </property>
                 <property name="text">
-                 <string>Add HMMs</string>
+                 <string>Add HMM Rule</string>
                 </property>
                </widget>
               </item>
