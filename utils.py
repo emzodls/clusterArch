@@ -24,13 +24,53 @@ from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 from Bio.Seq import Seq
 from Bio.Alphabet import generic_protein,generic_dna
-from clusterTools import clusterAnalysis,clusterGraphics
+from clusterTools import clusterAnalysis
 from random import random
 import subprocess,os,platform
-import gzip,re,urllib
+import gzip,re,math
 from pickle import dump,load
-from copy import deepcopy
-from collections import Counter
+import colorsys
+from fractions import Fraction
+from itertools import chain,count
+
+'''
+color generation from:
+http://stackoverflow.com/questions/470690/how-to-automatically-generate-n-distinct-colors
+'''
+def zenos_dichotomy():
+    """
+    http://en.wikipedia.org/wiki/1/2_%2B_1/4_%2B_1/8_%2B_1/16_%2B_%C2%B7_%C2%B7_%C2%B7
+    """
+    for k in count():
+        yield Fraction(1,2**k)
+
+def getfracs():
+    """
+    [Fraction(0, 1), Fraction(1, 2), Fraction(1, 4), Fraction(3, 4), Fraction(1, 8), Fraction(3, 8), Fraction(5, 8), Fraction(7, 8), Fraction(1, 16), Fraction(3, 16), ...]
+    [0.0, 0.5, 0.25, 0.75, 0.125, 0.375, 0.625, 0.875, 0.0625, 0.1875, ...]
+    """
+    yield 0
+    for k in zenos_dichotomy():
+        i = k.denominator # [1,2,4,8,16,...]
+        for j in range(1,i,2):
+            yield Fraction(j,i)
+
+bias = lambda x: (math.sqrt(x/3)/Fraction(2,3)+Fraction(1,3))/Fraction(6,5) # can be used for the v in hsv to map linear values 0..1 to something that looks equidistant
+
+def genhsv(h):
+    for s in [Fraction(6,10)]: # optionally use range
+        for v in [Fraction(8,10),Fraction(5,10)]: # could use range too
+            yield (h, s, v) # use bias for v here if you use range
+
+genrgb = lambda x: colorsys.hsv_to_rgb(*x)
+
+flatten = chain.from_iterable
+
+def _get_colors_Janus(num_colors):
+    fracGen = getfracs()
+    fracs = [next(fracGen) for i in range(int((num_colors+1)/2))]
+    rgbs = list(map(genrgb,flatten(list(map(genhsv,fracs)))))
+    return rgbs[:num_colors]
 
 ### To fix the file paths in windows ###
 # from http://stackoverflow.com/questions/23598289/how-to-get-windows-short-file-name-in-python
@@ -146,9 +186,13 @@ def MakeBlastDB(makeblastdbExec,dbPath,outputDir,outDBName):
 
 def runBLASTself(blastExec,inputFastas,outputDir,searchName,eValue='1E-05'):
     if platform.system() == 'Windows':
+        path, outputDBname = os.path.split(inputFastas)
+        dbPath = os.path.join(get_short_path_name(path),outputDBname)
         inputFastas = get_short_path_name(inputFastas)
         outputDir = get_short_path_name(outputDir)
-    command = [blastExec, "-db", inputFastas, "-query", inputFastas, "-outfmt", "6", "-max_target_seqs", "10000", "-max_hsps", '1',
+    else:
+        dbPath = inputFastas
+    command = [blastExec, "-db", dbPath, "-query", inputFastas, "-outfmt", "6", "-max_target_seqs", "10000", "-max_hsps", '1',
                "-evalue", eValue, "-out", os.path.join(outputDir,"{}_self_blast_results.out".format(searchName))]
     out, err, retcode = execute(command)
     if retcode != 0:
@@ -336,7 +380,8 @@ def processSearchListOptionalHits(requiredBlastList,requiredHmmList,selfBlastFil
 
 def processSearchListClusterJson(requiredBlastList,requiredHmmList,selfBlastFile,blastOutFile,blastEval,
                                   hmmOutFile,hmmScore, hmmDomLen,
-                                  windowSize,totalHitsRequired,additionalBlastList=[],additionalHmmList=[],jsonOutput=False):
+                                  windowSize,totalHitsRequired,additionalBlastList=[],additionalHmmList=[],
+                                 jsonOutput=False,geneIdxFile=None):
     # Gather all of the proteins, might be a memory issue...code memory friendly version with sequential filters (?)
     prots = dict()
     if requiredBlastList or additionalBlastList:
@@ -349,7 +394,10 @@ def processSearchListClusterJson(requiredBlastList,requiredHmmList,selfBlastFile
 
     additionalBlastHitDict = dict()
     additionalHmmHitDict = dict()
-    selfScoreDict = processSelfBlastScore(selfBlastFile)
+    if requiredBlastList or additionalBlastList:
+        selfScoreDict = processSelfBlastScore(selfBlastFile)
+    else:
+        selfScoreDict = dict()
 
     if requiredBlastList:
         requiredBlastHitDict = {hitName:set(protein for protein in prots.values() if hitName in protein.hit_dict['blast'].hits)
@@ -420,14 +468,14 @@ def processSearchListClusterJson(requiredBlastList,requiredHmmList,selfBlastFile
                             [(protein.name, None) for
                              protein in (hitSet & clusterProts)]
 
-    if jsonOutput:
+    if jsonOutput and filteredClusters:
         blastLists = (set(requiredBlastList),set(additionalBlastList))
         hmmLists = (set(requiredHmmList),set(additionalHmmList))
         hmmQuerys = set()
         for hmms in requiredHmmList+ additionalHmmList:
             for hmm in hmms:
                 hmmQuerys.add(hmm)
-        jsonFile = createJsonFile(filteredClusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict)
+        jsonFile = createJsonFile(filteredClusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict,geneIdxFile=geneIdxFile)
     else:
         jsonFile = ''
 
@@ -470,7 +518,7 @@ def createJsonFile(clusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict,
     ct_data = []
     requiredBlast,optionalBlast = blastLists
     requiredHMM,optionalHMM = hmmLists
-    colors = clusterGraphics._get_colors_Janus(len(requiredBlast|optionalBlast|requiredHMM|optionalHMM) + len(hmmQuerys))
+    colors = _get_colors_Janus(len(requiredBlast|optionalBlast|requiredHMM|optionalHMM) + len(hmmQuerys))
     hitColorDict = {}
     for idx,hit in enumerate(requiredBlast|optionalBlast|requiredHMM|optionalHMM):
         hitColorDict[hit] = 'rgb({},{},{})'.format(*map(lambda x: int(x*255),colors[idx]))
@@ -495,6 +543,8 @@ def createJsonFile(clusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict,
             clusterDict['end'] = int(cluster.location[1])
             clusterDict['offset'] = int(cluster[0].location[0][0]) - 1
             clusterDict['size'] = int(cluster.size())
+            similarityScore = 0
+            blastHits = 0
             orfs = []
             hitProts = set(prot for prot in cluster)
             for protein in cluster:
@@ -516,17 +566,23 @@ def createJsonFile(clusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict,
                 if len(hitsToConsider) == 1:
                     queryHit = hitsToConsider[0]
                     ## Add distance information if BLAST Hit
-                    if queryHit in requiredBlast or hitsToConsider[0] in optionalBlast:
-                        proteinDict['blastHitScore'] = round(protein.hit_dict['blast'].get(queryHit)
-                                                             / selfScoreDict[queryHit], 3)
+                    if queryHit in requiredBlast or queryHit in optionalBlast:
+                        blastHitScore = round(protein.hit_dict['blast'].get(queryHit)
+                                              / selfScoreDict[queryHit], 3)
+                        proteinDict['blastHitScore'] = blastHitScore
+                        similarityScore += blastHitScore
+                        blastHits += 1
                     proteinDict['color'] = hitColorDict[queryHit]
                 ## if there are multiple possibilities check for assignments
                 else:
                     ## Add distance information if BLAST Hit
                     for queryHit in hitsToConsider:
-                        if queryHit in requiredBlast or hitsToConsider[0] in optionalBlast:
-                            proteinDict['blastHitScore'] = round(protein.hit_dict['blast'].get(queryHit)
+                        if queryHit in requiredBlast or queryHit in optionalBlast:
+                            blastHitScore = round(protein.hit_dict['blast'].get(queryHit)
                                                                  / selfScoreDict[queryHit], 3)
+                            proteinDict['blastHitScore'] = blastHitScore
+                            similarityScore += blastHitScore
+                            blastHits += 1
                             proteinDict['color'] = hitColorDict[queryHit]
                             break
                     else:
@@ -606,12 +662,16 @@ def createJsonFile(clusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict,
                     # print(e)
                     pass
             clusterDict['orfs'] = orfs
+            clusterDict['similarityScore'] = round(similarityScore,2)
+            clusterDict['blastHits'] = blastHits
             ct_data.append(clusterDict)
             hits = [hit for hit in hitColorDict.keys()]
             hit_colors = [hitColorDict[hit] for hit in hits]
             hits = [str(hit) for hit in hits]
             hmms = [str(hit) for hit in hmmColors.keys()]
             hmm_colors = [hmmColors[hmm] for hmm in hmms]
+    # arrange by similarity score
+    ct_data.sort(reverse=True,key=lambda cluster:cluster['similarityScore'])
     return 'var ct_scale = {}\nvar ct_data={}\nvar hits={}\nvar hit_colors={}\nvar hmms={}\nvar hmm_colors={}'.format(int(biggestCluster),
                                                                                               str(ct_data),
                                                                                               str(hits),
@@ -967,5 +1027,5 @@ def generateCtDBIdxFile(ctDB,outfile):
 
     return
 if __name__ == "__main__":
-    os.chdir('/Volumes/Data/clusterToolsDB/genomesRS')
-    generateCtDBIdxFile('archBactProtMeta.clusterToolDB.fasta', 'archBactProtMeta.db')
+    os.chdir('/Volumes/Theme2/clusterToolsDatabases/mibig')
+    generateCtDBIdxFile('mibig13CDS.fasta', 'mibig13CDS.ctDB.idx')

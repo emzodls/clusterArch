@@ -14,8 +14,19 @@ function ct(ct_data, ct_scale, hits,hit_colors,hmms,hmm_colors,container) {
   for (var i in ct_data) {
     ctHits.append('<div id="hit-' + i + '">')
     var hitDiv = $("#hit-"+i);
-    
-  	hitDiv.append("<h4>" + ct_data[i]["id"] + " (Location: " + ct_data[i]["start"] + "-" + ct_data[i]["end"] + ", Size: " + ct_data[i]["size"] + " nts)" + "</h4>");
+    if(ct_data[i].hasOwnProperty("blastHits")){
+      if (ct_data[i]["blastHits"] > 0){
+  	     hitDiv.append("<h4  style='margin-bottom: 0px;'>" + ct_data[i]["id"] + " (Location: " + ct_data[i]["start"] + "-" + ct_data[i]["end"] + ", Size: " + ct_data[i]["size"] + " nts) </h4><p style='margin-top: 0px;margin-bottom: 0px;'>Similarity Score:"
+                    + ct_data[i]["similarityScore"] + ", Number BLAST Hits: "   
+                     + ct_data[i]["blastHits"]   + "</p>");
+      }
+      else{
+        hitDiv.append("<h4>" + ct_data[i]["id"] + " (Location: " + ct_data[i]["start"] + "-" + ct_data[i]["end"] + ", Size: " + ct_data[i]["size"] + " nts)</h4>");
+      }
+    }
+      else{
+        hitDiv.append("<h4>" + ct_data[i]["id"] + " (Location: " + ct_data[i]["start"] + "-" + ct_data[i]["end"] + ", Size: " + ct_data[i]["size"] + " nts)</h4>");
+      }
     var svg = $(Arrower.drawClusterToolsSVG(ct_data[i],ct_scale));
     svg.css("clear", "both");
     svg.addClass("arrower-svg");

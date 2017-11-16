@@ -53,6 +53,7 @@ class Ui_Results(object):
         self.exportSummaryResultsBtn.setObjectName("exportSummaryResultsBtn")
         self.horizontalLayout_2.addWidget(self.exportSummaryResultsBtn)
         self.viewHTMLvisBtn = QtWidgets.QPushButton(Results)
+        self.viewHTMLvisBtn.setEnabled(False)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)

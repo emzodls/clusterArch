@@ -21,14 +21,14 @@
     along with clusterTools.  If not, see <http://www.gnu.org/licenses/>.
 '''
 
-import os,csv,urllib,gzip,platform
+import os,csv,urllib,gzip,platform,shutil,webbrowser
 from PyQt5.QtCore import (QRegularExpression,
         Qt,QThread,pyqtSignal,pyqtSlot,QObject)
 from PyQt5 import QtGui
 from PyQt5.QtWidgets import (QApplication, QFileDialog, QMainWindow,
         QMessageBox,QTableWidgetItem,QWidget,QListWidgetItem)
 from utils import parseSeqFile,parseHMMfile,generateInputFasta,generateHMMdb,MakeBlastDB,runBLAST,runBLASTself,\
-    runHmmsearch,proccessGbks,processSearchListOptionalHits,humanbytes,processGbkDivFile,\
+    runHmmsearch,proccessGbks,humanbytes,processGbkDivFile,\
     ncbiGenomeFastaParser,fastaDictToSeqRecs,writeSeqRecs,runHmmCheck,runHmmBuild,generateCtDBIdxFile,processSearchListClusterJson
 from collections import Counter
 from glob import iglob,glob
@@ -422,7 +422,7 @@ class runProcessSearchListOptionalHits(QObject):
     result = pyqtSignal(tuple)
     def __init__(self,requiredBlastList,requiredHmmList,selfBlastFile,blastOutFile,blastEval,
                  hmmOutFile,hmmScore,hmmDomLen,
-                 windowSize,totalHitsRequired, additionalBlastList=[], additionalHmmList=[]):
+                 windowSize,totalHitsRequired, additionalBlastList=[], additionalHmmList=[],geneIdxFile=None):
         self.requiredBlastList = requiredBlastList
         self.requiredHmmList = requiredHmmList
 
@@ -439,7 +439,7 @@ class runProcessSearchListOptionalHits(QObject):
         self.windowSize = windowSize
 
         self.totalHitsRequired = totalHitsRequired
-
+        self.geneIdxFile = geneIdxFile
 
         super(runProcessSearchListOptionalHits, self).__init__()
     @pyqtSlot()
@@ -449,7 +449,8 @@ class runProcessSearchListOptionalHits(QObject):
         output = processSearchListClusterJson(self.requiredBlastList, self.requiredHmmList,
                                                          self.selfBlastFile,self.blastOutFile, self.blastEval,
                                                          self.hmmOutFile,self.hmmScore,self.hmmDomLen,self.windowSize,
-                                                         self.totalHitsRequired,self.additionalBlastList,self.additionalHmmList,jsonOutput=True)
+                                                         self.totalHitsRequired,self.additionalBlastList,self.additionalHmmList,
+                                              jsonOutput=True,geneIdxFile=self.geneIdxFile)
         self.result.emit(output)
 
 class exportSelectedGbWorker(QObject):
@@ -1611,6 +1612,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         else:
             summaryFile['HMMer'] = []
             summaryFile['hmmerOut'] = None
+
         dump(summaryFile,open(os.path.join(self.outputDir,self.searchName,'{}.clusterTools.summary'.format(self.searchName)),'wb'))
 
     def updateLastSearch(self):
@@ -1819,8 +1821,9 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 self.resultsWin.resultsList.setItem(currentRowCount, idx + 6,
                                     QTableWidgetItem('; '.join(hit[0] for hit in sortedList)))
             for idx, hmmHit in enumerate(hmmList):
+                hitList = hitDict.get(hmmHit,[])
                 self.resultsWin.resultsList.setItem(currentRowCount, idx + len(blastList) + 6,
-                                              QTableWidgetItem('; '.join(hit[0] for hit in sortedList)))
+                                              QTableWidgetItem('; '.join(hit[0] for hit in hitList)))
             self.resultsWin.resultsList.setItem(currentRowCount,5,
                                                 QTableWidgetItem('{0:.4f}'.format(blastScore)))
         self.resultsWin.resultsList.resizeColumnsToContents()
@@ -1828,7 +1831,29 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.resultsWin.exportSummaryResultsBtn.clicked.connect(self.exportResultsSummary)
         self.resultsWin.selectGbkExportDirBtn.clicked.connect(self.selectGbkExportDir)
         self.resultsWin.exportSelectedGbkBtn.clicked.connect(self.exportSelectedGbk)
+        ## If json file exists enable button for visualization
+        jsonOutFile = os.path.join(self.outputDir, '{}.cTools.js'.format(self.searchName))
+        if os.path.isfile(jsonOutFile):
+            self.resultsWin.viewHTMLvisBtn.setEnabled(True)
+            self.resultsWin.viewHTMLvisBtn.clicked.connect(self.showHTML)
+            if not os.path.isdir(os.path.join(self.outputDir, 'htmlvis')):
+                shutil.copytree(os.path.join(self.runDir, 'htmlvis'), os.path.join(self.outputDir, 'htmlvis'))
+            else:
+                shutil.rmtree(os.path.join(self.outputDir, 'htmlvis'))
+                shutil.copytree(os.path.join(self.runDir, 'htmlvis'), os.path.join(self.outputDir, 'htmlvis'))
+            jsonOutFile = os.path.join(self.outputDir, '{}.cTools.js'.format(self.searchName))
+            shutil.copy2(jsonOutFile, os.path.join(self.outputDir, 'htmlvis', 'output.cTools.js'))
+            if sys.platform == "darwin":
+                webbrowser.open_new('file:///'+ os.path.join(self.outputDir, 'htmlvis', 'output.cTools.html'))
+            else:
+                webbrowser.open_new(os.path.join(self.outputDir, 'htmlvis', 'output.cTools.html'))
         self.resultsWin.show()
+
+    def showHTML(self):
+        if sys.platform == "darwin":
+            webbrowser.open_new('file:///' + os.path.join(self.outputDir, 'htmlvis', 'output.cTools.html'))
+        else:
+            webbrowser.open_new(os.path.join(self.outputDir,'htmlvis','output.cTools.html'))
 
     def selectAllResults(self):
         for idx in range(self.resultsWin.resultsList.rowCount()):
@@ -1926,10 +1951,21 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                     rowData[0] = '##' + rowData[0]
                     writer.writerow(rowData)
 
+
                     for rowIdx in range(self.resultsWin.resultsList.rowCount()):
                         rowData = [self.resultsWin.resultsList.item(rowIdx, colIdx).text().strip()
                                    for colIdx in range(1,self.resultsWin.resultsList.columnCount())]
                         writer.writerow(rowData)
+                ### if there is a json file include html output folder
+                jsonOutFile = os.path.join(self.outputDir, '{}.cTools.js'.format(self.searchName))
+                if os.path.isfile(jsonOutFile):
+                    htmlOutputPath = os.path.join(path,os.path.splitext(fileName)[0]+ '-html')
+                    if not os.path.isdir(htmlOutputPath):
+                        shutil.copytree(os.path.join(self.runDir, 'htmlvis'), htmlOutputPath)
+                    else:
+                        shutil.rmtree(htmlOutputPath)
+                        shutil.copytree(os.path.join(self.runDir, 'htmlvis'), htmlOutputPath)
+                    shutil.copy2(jsonOutFile, os.path.join(htmlOutputPath, 'output.cTools.js'))
             else:
                 msg = QMessageBox()
                 msg.setIcon(QMessageBox.Critical)
@@ -2383,6 +2419,18 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 if not self.runnerThread:
                     self.runnerThread = QThread()
                 self.runnerThread.start()
+                ### check if there is an existing idx file
+                dbPath,dbName = os.path.split(self.pathToDatabase)
+                print(self.pathToDatabase)
+                baseName,ext = os.path.splitext(dbName)
+                print('Checking',os.path.join(dbPath,baseName +'.ctDB.idx'),os.path.join(self.outputDir,baseName + '.ctDB.idx'))
+                if os.path.isfile(os.path.join(dbPath,baseName + '.ctDB.idx')):
+                    dbIdxFile = os.path.join(dbPath,baseName + '.ctDB.idx')
+                elif os.path.isfile(os.path.join(self.outputDir,baseName,'.ctDB.idx')):
+                    dbIdxFile = os.path.join(self.outputDir,baseName,'.ctDB.idx')
+                else:
+                    dbIdxFile = None
+                print(dbIdxFile)
                 self.processSearchListWorker = runProcessSearchListOptionalHits(requiredBlastList,requiredHmmList,
                                                                                 selfBlastFile,blastOutFile,
                                                                                     self.nameToParamDict['blastEval'],
@@ -2391,7 +2439,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                                                                                     self.nameToParamDict['hmmDomLen'],
                                                                                     self.nameToParamDict['windowSize'],
                                                                                     self.totalHitsRequired,
-                                                                                    optionalBlastList,optionalHmmList)
+                                                                                    optionalBlastList,optionalHmmList,geneIdxFile=dbIdxFile)
                 self.processSearchListWorker.result.connect(
                         lambda x: self.generateResults(x, self.statusWin,requiredBlastList+optionalBlastList,
                                                        requiredHmmList+optionalHmmList))
@@ -2411,8 +2459,8 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                                      '6/6', 6)
             statusWin.viewResultsBtn.setEnabled(True)
             statusWin.viewResultsBtn.clicked.connect(lambda: self.showResultsWindow(statusWin,blastList,hmmList,filteredClusters))
-            jsonOutFile = os.path.join(self.outputDir, '{}.json'.format(self.searchName))
-            if json != '':
+            jsonOutFile = os.path.join(self.outputDir, '{}.cTools.js'.format(self.searchName))
+            if json != '' and os.access(self.outputDir,os.W_OK):
                 with open(jsonOutFile,'w') as outfile:
                     outfile.write(json)
             if self.runnerThread:
@@ -2655,7 +2703,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                     hmmCheck = True
                 else:
                     hmmCheck = False
-
+                self.outputDir = resultsFilePath
                 if hmmCheck and blastCheck:
                     #### reinitialize savedSearch
                     self.maxEvals['blastEval'] = float(self.SavedResultSummary['blastEval'])
@@ -2906,6 +2954,16 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                                          % (self.nameToSavedParamDict['hmmScore'], self.nameToSavedParamDict['hmmDomLen'],
                                             self.nameToSavedParamDict['windowSize']),
                                          '5/6', 5)
+
+                dbPath, dbName = os.path.split(self.SavedResultSummary['db'])
+                baseName,ext = os.path.splitext(dbName)
+                print('Checking',os.path.join(dbPath,baseName +'.ctDB.idx'),os.path.join(self.outputDir,baseName + '.ctDB.idx'))
+                if os.path.isfile(os.path.join(dbPath,baseName + '.ctDB.idx')):
+                    dbIdxFile = os.path.join(dbPath,baseName + '.ctDB.idx')
+                elif os.path.isfile(os.path.join(self.outputDir,baseName,'.ctDB.idx')):
+                    dbIdxFile = os.path.join(self.outputDir,baseName,'.ctDB.idx')
+                else:
+                    dbIdxFile = None
                 if not self.runnerThread:
                     self.runnerThread = QThread()
                 self.runnerThread.start()
@@ -2917,7 +2975,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                                                                                 self.nameToSavedParamDict['hmmDomLen'],
                                                                                 self.nameToSavedParamDict['windowSize'],
                                                                                 self.savedTotalHitsRequired,
-                                                                                optionalBlastList, optionalHmmList)
+                                                                                optionalBlastList, optionalHmmList,geneIdxFile=dbIdxFile)
                 self.processSearchListWorker.result.connect(
                     lambda x: self.generateResults(x, self.savedSearchstatusWin, requiredBlastList + optionalBlastList,
                                                    requiredHmmList + optionalHmmList,savedSearch=True))
@@ -2937,9 +2995,12 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
     def cleanFiles(self):
         foldersToCheck = [self.outputDirectorySelector.itemText(idx) for idx in range(self.outputDirectorySelector.count())
                           if 'Select Directory...' not in self.outputDirectorySelector.itemText(idx)]
+        foldersToCheck = [folder for folder in foldersToCheck if folder != self.runDir]
+        if self.outputDir != self.runDir:
+            foldersToCheck.append(self.outputDir)
         filesToDelete = []
         extensionsToCheck = ['*_blast_results.out','*_gene_queries.fa','*_hmmDB.hmm','*_hmmSearch.out',
-                             '*_gene_queries.fa.*']
+                             '*_gene_queries.fa.*','*.cTools.js','*.cTools.html']
         for folder in foldersToCheck:
             for extension in extensionsToCheck:
                 filesToDelete.extend(glob(os.path.join(folder,extension)))
@@ -2949,6 +3010,10 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         for tmpFile in filesToDelete:
             if os.path.isfile(tmpFile):
                 os.remove(tmpFile)
+        htmlVisFolders = [os.path.join(folder,'htmlvis') for folder in foldersToCheck]
+        for htmlVisFolder in htmlVisFolders:
+            if os.path.isdir(htmlVisFolder):
+                shutil.rmtree(htmlVisFolder)
 
 
 def main():
