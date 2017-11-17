@@ -292,12 +292,12 @@ class HmmParser():
         self.text = text
 
         self.current_token = None
-        identifiers = set()
+        self.identifiers = set()
         tokens = Tokeniser(text.expandtabs()).tokens
             # gather all signature identifiers
         for token in list(tokens):
             if token.type == TokenTypes.IDENTIFIER:
-                identifiers.add(token.identifier)
+                self.identifiers.add(token.identifier)
         # start the iterator up for parsing
         self.tokens = iter(tokens)
         try:
@@ -307,7 +307,7 @@ class HmmParser():
         self.rule = self._parse_rule()
 
         if hmmSet:
-            notInSet = identifiers - hmmSet
+            notInSet = self.identifiers - hmmSet
             if notInSet:
                 raise ValueError("Rules contained identifers without signatures: %s" % ", ".join(sorted(list(notInSet))))
         #### Add validity check from HMM list. ########
@@ -506,18 +506,19 @@ def prepareRulesByIdDict(hmmResults,cutoff):
                 else:
                     results_by_id[hsp.hit_id].append(hmmHit(hsp.query_id))
     return results_by_id
-
-
+#
+#
 test = HmmParser('(KS_DOMAIN and AT_DOMAIN) or (C_DOMAIN and A_DOMAIN) and R_DOMAIN',hmmSet={'AT_DOMAIN', 'A_DOMAIN', 'R_DOMAIN', 'C_DOMAIN', 'KS_DOMAIN'})
-
-prots = clusterAnalysis.add_sequences('/Users/emzodls/Dropbox/Lab/Warwick/genomes/mibig/mibig13CDS.fasta',{})
-prots = clusterAnalysis.parse_hmmsearch_domtbl_anot('/Users/emzodls/Dropbox/Lab/Warwick/genomes/mibig/'
-                                                    'mibigNRPS.out',15,'hmm',prots)
-for prot in prots.values():
-    if HmmParser('(KS_DOMAIN and AT_DOMAIN) or (C_DOMAIN and A_DOMAIN) and R_DOMAIN',hmmSet={'AT_DOMAIN', 'A_DOMAIN', 'R_DOMAIN', 'C_DOMAIN', 'KS_DOMAIN'}).rule.condition.is_satisfied(prot):
-        print(prot.name,prot.getDomStr('hmm',';'))
-#test = Tokeniser('transAT	20	20	cds(minimum(2, KS_DOMAIN) and ((KS_DOMAIN and AT_DOMAIN) or (C_DOMAIN and A_DOMAIN) and R_DOMAIN))'.expandtabs())
-#print(test.tokens)
+print(test.identifiers)
+#
+# prots = clusterAnalysis.add_sequences('/Users/emzodls/Dropbox/Lab/Warwick/genomes/mibig/mibig13CDS.fasta',{})
+# prots = clusterAnalysis.parse_hmmsearch_domtbl_anot('/Users/emzodls/Dropbox/Lab/Warwick/genomes/mibig/'
+#                                                     'mibigNRPS.out',15,'hmm',prots)
+# for prot in prots.values():
+#     if HmmParser('(KS_DOMAIN and AT_DOMAIN) or (C_DOMAIN and A_DOMAIN) and R_DOMAIN',hmmSet={'AT_DOMAIN', 'A_DOMAIN', 'R_DOMAIN', 'C_DOMAIN', 'KS_DOMAIN'}).rule.condition.is_satisfied(prot):
+#         print(prot.name,prot.getDomStr('hmm',';'))
+# #test = Tokeniser('transAT	20	20	cds(minimum(2, KS_DOMAIN) and ((KS_DOMAIN and AT_DOMAIN) or (C_DOMAIN and A_DOMAIN) and R_DOMAIN))'.expandtabs())
+# #print(test.tokens)
 #print(list(test.tokens)[1:])
 # parser = rule_parser.Parser(open('/Users/emzodls/antismash5/antismash/modules/hmm_detection/test_rule.txt'))
 # results = SearchIO.parse("/Volumes/Data/clusterToolsDB/mibig/mibigNRPS.out",'hmmsearch3-domtab')

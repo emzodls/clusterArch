@@ -296,89 +296,6 @@ def processSelfBlastScore(blastOutFile):
     return scoreDict
 
 
-def processSearchListOptionalHits(requiredBlastList,requiredHmmList,selfBlastFile,blastOutFile,blastEval,
-                                  hmmOutFile,hmmScore, hmmDomLen,
-                                  windowSize,totalHitsRequired,additionalBlastList=[],additionalHmmList=[]):
-    # Gather all of the proteins, might be a memory issue...code memory friendly version with sequential filters (?)
-    prots = dict()
-    if requiredBlastList or additionalBlastList:
-        prots = clusterAnalysis.parseBLAST(blastOutFile,prots,swapQuery=True,evalCutoff=blastEval)
-    if requiredHmmList or additionalHmmList:
-        prots = clusterAnalysis.parse_hmmsearch_domtbl_anot(hmmOutFile,hmmDomLen,'hmm',prots,cutoff_score=hmmScore)
-
-    requiredBlastHitDict = dict()
-    requiredHmmHitDict = dict()
-
-    additionalBlastHitDict = dict()
-    additionalHmmHitDict = dict()
-    selfScoreDict = processSelfBlastScore(selfBlastFile)
-
-    if requiredBlastList:
-        requiredBlastHitDict = {hitName:set(protein for protein in prots.values() if hitName in protein.hit_dict['blast'].hits)
-                  for hitName in requiredBlastList}
-    if requiredHmmList:
-        requiredHmmHitDict = {hmms: set(protein for protein in prots.values() if len(set(hmms) & protein.getAnnotations('hmm')) == len(hmms))
-               for hmms in requiredHmmList}
-    if additionalBlastList:
-        additionalBlastHitDict = {hitName:set(protein for protein in prots.values() if hitName in protein.hit_dict['blast'].hits)
-                  for hitName in additionalBlastList}
-    if additionalHmmList:
-        additionalHmmHitDict = {hmms: set(protein for protein in prots.values() if len(set(hmms) & protein.getAnnotations('hmm')) == len(hmms))
-               for hmms in additionalHmmList}
-    requiredHitDict = {**requiredBlastHitDict,**requiredHmmHitDict}
-    additionalHitDict = {**additionalBlastHitDict, **additionalHmmHitDict}
-
-    #need this for repeat domains
-
-    requiredHitList = requiredBlastList+requiredHmmList
-    additionalHitList = additionalBlastList+additionalHmmList
-    numReqHits = len(requiredHitList)
-
-    hitDict = {**requiredHitDict, **additionalHitDict}
-
-    hitProteins = set()
-    hitProteins.update(*requiredHitDict.values())
-    hitProteins.update(*additionalHitDict.values())
-
-    putativeClusters = clusterAnalysis.clusterProteins(hitProteins,windowSize)
-    assert totalHitsRequired >= numReqHits
-
-    numExtraHitsNeeded = totalHitsRequired - numReqHits
-    filteredClusters = dict()
-    for species,clusters in putativeClusters.items():
-        for cluster in clusters:
-            clusterProts = set(protein for protein in cluster)
-            requiredHitProts = set()
-            for hitID in requiredHitList:
-                requiredHitProts.update(clusterProts & requiredHitDict[hitID])
-            additionalHitProts = set()
-            for hitID in additionalHitList:
-                additionalHitProts.update(clusterProts & additionalHitDict[hitID])
-            '''
-            First Term: check if there enough protein hits to satisfy the number of required hits
-            Second Term: check if there are enough other hits to satisfy the required number of additional hits
-            Third Term: check that there are enough proteins to populate the list
-            Fourth Term: check that there is at least one hit per required hit in hit list
-            Fifth Term: check that there is enough to satisfy the additional hits
-            '''
-            if len(requiredHitProts) >= numReqHits and \
-                len(additionalHitProts) >= numExtraHitsNeeded and \
-                (len(clusterProts) >= totalHitsRequired)  and \
-                (sum(1 for hitID in requiredHitList if len(clusterProts & requiredHitDict[hitID]) >= 1) == numReqHits) and \
-                (sum(1 for hitID in additionalHitList if len(clusterProts & additionalHitDict[hitID]) >= 1) >= numExtraHitsNeeded):
-                filteredClusters[(species,cluster.location[0],cluster.location[1])] = dict()
-                for hitQuery,hitSet in hitDict.items():
-                    ### if BLAST hit include similarity score
-                    if hitQuery in requiredBlastList or hitQuery in additionalBlastList:
-                        filteredClusters[(species, cluster.location[0], cluster.location[1])][hitQuery] = \
-                        [(protein.name, protein.hit_dict['blast'].get(hitQuery)/selfScoreDict[hitQuery]) for
-                         protein in (hitSet & clusterProts)]
-                    else:
-                        filteredClusters[(species, cluster.location[0], cluster.location[1])][hitQuery] = \
-                            [(protein.name, None) for
-                             protein in (hitSet & clusterProts)]
-    return filteredClusters
-
 def processSearchListHmmParser(requiredBlastList,requiredHmmList,selfBlastFile,blastOutFile,blastEval,
                                   hmmOutFile,hmmScore, hmmDomLen,
                                   windowSize,totalHitsRequired,additionalBlastList=[],additionalHmmList=[],
@@ -400,15 +317,25 @@ def processSearchListHmmParser(requiredBlastList,requiredHmmList,selfBlastFile,b
         requiredBlastHitDict = {hitName:set(protein for protein in prots.values() if hitName in protein.hit_dict['blast'].hits)
                   for hitName in requiredBlastList}
     if requiredHmmList:
-        requiredHmmHitDict = {hmmRule: set(protein for protein in prots.values() if HmmParser(hmmRule).rule.condition.is_satisfied(protein))
-               for hmmRule in requiredHmmList}
+        for hmmRule in requiredHmmList:
+            requiredHmmHitDict[hmmRule] = set()
+            ruleParser = HmmParser(hmmRule)
+            for protein in prots.values():
+                if ruleParser.rule.condition.is_satisfied(protein):
+                    requiredHmmHitDict[hmmRule].add(protein)
     if additionalBlastList:
         additionalBlastHitDict = {hitName:set(protein for protein in prots.values() if hitName in protein.hit_dict['blast'].hits)
                   for hitName in additionalBlastList}
     if additionalHmmList:
-        additionalHmmHitDict = {hmmRule: set(protein for protein in prots.values() if HmmParser(hmmRule).rule.condition.is_satisfied(protein))
-                for hmmRule in additionalHmmList}
+        for hmmRule in additionalHmmList:
+            additionalHmmHitDict[hmmRule] = set()
+            ruleParser = HmmParser(hmmRule)
+            for protein in prots.values():
+                if ruleParser.rule.condition.is_satisfied(protein):
+                    additionalHmmHitDict[hmmRule].add(protein)
 
+    print(requiredHmmHitDict)
+    print(additionalHmmHitDict)
     requiredHitDict = {**requiredBlastHitDict,**requiredHmmHitDict}
     additionalHitDict = {**additionalBlastHitDict, **additionalHmmHitDict}
     hitDict = {**requiredHitDict,**additionalHitDict}
@@ -470,113 +397,10 @@ def processSearchListHmmParser(requiredBlastList,requiredHmmList,selfBlastFile,b
         blastLists = (set(requiredBlastList),set(additionalBlastList))
         hmmLists = (set(requiredHmmList),set(additionalHmmList))
         hmmQuerys = set()
-        for hmms in requiredHmmList+ additionalHmmList:
-            for hmm in hmms:
-                hmmQuerys.add(hmm)
-        jsonFile = createJsonFile(filteredClusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict,geneIdxFile=geneIdxFile)
-    else:
-        jsonFile = ''
-
-    return filteredCTvisOutput,jsonFile
-
-
-def processSearchListClusterJson(requiredBlastList,requiredHmmList,selfBlastFile,blastOutFile,blastEval,
-                                  hmmOutFile,hmmScore, hmmDomLen,
-                                  windowSize,totalHitsRequired,additionalBlastList=[],additionalHmmList=[],
-                                 jsonOutput=False,geneIdxFile=None):
-    # Gather all of the proteins, might be a memory issue...code memory friendly version with sequential filters (?)
-    prots = dict()
-    if requiredBlastList or additionalBlastList:
-        prots = clusterAnalysis.parseBLAST(blastOutFile,prots,swapQuery=True,evalCutoff=blastEval)
-    if requiredHmmList or additionalHmmList:
-        prots = clusterAnalysis.parse_hmmsearch_domtbl_anot(hmmOutFile,hmmDomLen,'hmm',prots,cutoff_score=hmmScore)
-
-    requiredBlastHitDict = dict()
-    requiredHmmHitDict = dict()
-
-    additionalBlastHitDict = dict()
-    additionalHmmHitDict = dict()
-    if requiredBlastList or additionalBlastList:
-        selfScoreDict = processSelfBlastScore(selfBlastFile)
-    else:
-        selfScoreDict = dict()
-
-    if requiredBlastList:
-        requiredBlastHitDict = {hitName:set(protein for protein in prots.values() if hitName in protein.hit_dict['blast'].hits)
-                  for hitName in requiredBlastList}
-    if requiredHmmList:
-        requiredHmmHitDict = {hmms: set(protein for protein in prots.values() if len(set(hmms) & protein.getAnnotations('hmm')) == len(hmms))
-               for hmms in requiredHmmList}
-    if additionalBlastList:
-        additionalBlastHitDict = {hitName:set(protein for protein in prots.values() if hitName in protein.hit_dict['blast'].hits)
-                  for hitName in additionalBlastList}
-    if additionalHmmList:
-        additionalHmmHitDict = {hmms: set(protein for protein in prots.values() if len(set(hmms) & protein.getAnnotations('hmm')) == len(hmms))
-               for hmms in additionalHmmList}
-    requiredHitDict = {**requiredBlastHitDict,**requiredHmmHitDict}
-    additionalHitDict = {**additionalBlastHitDict, **additionalHmmHitDict}
-    hitDict = {**requiredHitDict,**additionalHitDict}
-
-    #need this for repeat domains
-
-    requiredHitList = requiredBlastList+requiredHmmList
-    additionalHitList = additionalBlastList+additionalHmmList
-    numReqHits = len(requiredHitList)
-
-    hitProteins = set()
-    hitProteins.update(*requiredHitDict.values())
-    hitProteins.update(*additionalHitDict.values())
-
-    putativeClusters = clusterAnalysis.clusterProteins(hitProteins,windowSize)
-    assert totalHitsRequired >= numReqHits
-
-    numExtraHitsNeeded = totalHitsRequired - numReqHits
-    filteredClusters = dict()
-    filteredCTvisOutput = dict()
-    for species,clusters in putativeClusters.items():
-        for cluster in clusters:
-            clusterProts = set(protein for protein in cluster)
-            requiredHitProts = set()
-            for hitID in requiredHitList:
-                requiredHitProts.update(clusterProts & requiredHitDict[hitID])
-            additionalHitProts = set()
-            for hitID in additionalHitList:
-                additionalHitProts.update(clusterProts & additionalHitDict[hitID])
-            '''
-            First Term: check if there enough protein hits to satisfy the number of required hits
-            Second Term: check if there are enough other hits to satisfy the required number of additional hits
-            Third Term: check that there are enough proteins to populate the list
-            Fourth Term: check that there is at least one hit per required hit in hit list
-            Fifth Term: check that there is enough to satisfy the additional hits
-            '''
-
-            if len(requiredHitProts) >= numReqHits and \
-                len(additionalHitProts) >= numExtraHitsNeeded and \
-                (len(clusterProts) >= totalHitsRequired)  and \
-                (sum(1 for hitID in requiredHitList if len(clusterProts & requiredHitDict[hitID]) >= 1) == numReqHits) and \
-                (sum(1 for hitID in additionalHitList if len(clusterProts & additionalHitDict[hitID]) >= 1) >= numExtraHitsNeeded):
-                speciesClusters = filteredClusters.get(species,[])
-                speciesClusters.append(cluster)
-                filteredClusters[species] = speciesClusters
-                filteredCTvisOutput[(species, cluster.location[0], cluster.location[1])] = dict()
-                for hitQuery, hitSet in hitDict.items():
-                    ### if BLAST hit include similarity score
-                    if hitQuery in requiredBlastList or hitQuery in additionalBlastList:
-                        filteredCTvisOutput[(species, cluster.location[0], cluster.location[1])][hitQuery] = \
-                            [(protein.name, protein.hit_dict['blast'].get(hitQuery) / selfScoreDict[hitQuery]) for
-                             protein in (hitSet & clusterProts)]
-                    else:
-                        filteredCTvisOutput[(species, cluster.location[0], cluster.location[1])][hitQuery] = \
-                            [(protein.name, None) for
-                             protein in (hitSet & clusterProts)]
-
-    if jsonOutput and filteredClusters:
-        blastLists = (set(requiredBlastList),set(additionalBlastList))
-        hmmLists = (set(requiredHmmList),set(additionalHmmList))
-        hmmQuerys = set()
-        for hmms in requiredHmmList+ additionalHmmList:
-            for hmm in hmms:
-                hmmQuerys.add(hmm)
+        for hmmRule in requiredHmmList + additionalHmmList:
+            rule = HmmParser(hmmRule)
+            print(rule,rule.identifiers)
+            hmmQuerys.update(rule.identifiers)
         jsonFile = createJsonFile(filteredClusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict,geneIdxFile=geneIdxFile)
     else:
         jsonFile = ''

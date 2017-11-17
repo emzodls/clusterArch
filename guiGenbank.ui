@@ -1826,7 +1826,7 @@
                <number>0</number>
               </property>
               <item>
-               <widget class="QPushButton" name="addHMMbtn">
+               <widget class="QPushButton" name="addHmmRuleBtn">
                 <property name="sizePolicy">
                  <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
                   <horstretch>0</horstretch>
@@ -2511,7 +2511,7 @@
   <tabstop>addHMMfilePathBtn</tabstop>
   <tabstop>addHMMfilebtn</tabstop>
   <tabstop>hmmList</tabstop>
-  <tabstop>addHMMbtn</tabstop>
+  <tabstop>addHmmRuleBtn</tabstop>
   <tabstop>clearHMMbtn</tabstop>
   <tabstop>dataBaseSelector</tabstop>
   <tabstop>hitsNeededSpinBox</tabstop>

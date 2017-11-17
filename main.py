@@ -29,14 +29,16 @@ from PyQt5.QtWidgets import (QApplication, QFileDialog, QMainWindow,
         QMessageBox,QTableWidgetItem,QWidget,QListWidgetItem)
 from utils import parseSeqFile,parseHMMfile,generateInputFasta,generateHMMdb,MakeBlastDB,runBLAST,runBLASTself,\
     runHmmsearch,proccessGbks,humanbytes,processGbkDivFile,\
-    ncbiGenomeFastaParser,fastaDictToSeqRecs,writeSeqRecs,runHmmCheck,runHmmBuild,generateCtDBIdxFile,processSearchListClusterJson
+    ncbiGenomeFastaParser,fastaDictToSeqRecs,writeSeqRecs,runHmmCheck,runHmmBuild,generateCtDBIdxFile,processSearchListHmmParser
 from collections import Counter
 from glob import iglob,glob
 from itertools import chain
 from ncbiUtils import ncbiQuery,ncbiSummary,ncbiFetch,getGbkDlList,parseAssemblyReportFile,fetchGbksWithAcc
+from clusterToolsParser import HmmParser
+
 
 import mainGuiNCBI,resultsWindow,status,parameters,sys,createDbStatus,addGene,downloadNcbiFilesWin,gbDivSumWin, \
-    ncbiGenomeSumWin,buildHmmWin, wget
+    ncbiGenomeSumWin,buildHmmWin, addHmmRule, wget
 from pickle import load,dump
 #### NCBI Query Functions
 class ncbiQueryWorker(QObject):
@@ -446,7 +448,7 @@ class runProcessSearchListOptionalHits(QObject):
     @pyqtSlot(dict)
     @pyqtSlot(tuple)
     def run(self):
-        output = processSearchListClusterJson(self.requiredBlastList, self.requiredHmmList,
+        output = processSearchListHmmParser(self.requiredBlastList, self.requiredHmmList,
                                                          self.selfBlastFile,self.blastOutFile, self.blastEval,
                                                          self.hmmOutFile,self.hmmScore,self.hmmDomLen,self.windowSize,
                                                          self.totalHitsRequired,self.additionalBlastList,self.additionalHmmList,
@@ -488,6 +490,11 @@ class buildHmmWin(QWidget,buildHmmWin.Ui_buildHmmWin):
         self.setupUi(self)
 
 class gbDivSummaryWindow(QWidget,gbDivSumWin.Ui_DatabaseSummaryWin):
+    def __init__(self):
+        super(self.__class__,self).__init__()
+        self.setupUi(self)
+
+class addHmmRuleWindow(QWidget,addHmmRule.Ui_addHmmRuleWindow):
     def __init__(self):
         super(self.__class__,self).__init__()
         self.setupUi(self)
@@ -659,7 +666,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.addHMMfilebtn.clicked.connect(self.loadHMMFile)
 
         self.addGeneBtn.clicked.connect(self.loadGene)
-        self.addHMMbtn.clicked.connect(self.loadHMM)
+        self.addHmmRuleBtn.clicked.connect(self.showHmmRuleWin)
 
         self.removeSearchTermBtn.clicked.connect(self.removeSearchTerm)
 
@@ -1797,9 +1804,9 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 print(idx, blastHit)
             self.resultsWin.resultsList.setHorizontalHeaderItem(idx + 6, QTableWidgetItem(blastHit))
         for idx, hmmHit in enumerate(hmmList):
-            if self.verbose: print(idx,' and '.join(hmmHit))
+            if self.verbose: print(idx,hmmHit)
             self.resultsWin.resultsList.setHorizontalHeaderItem(idx + len(blastList) +6,
-                                                          QTableWidgetItem(' and '.join(hmmHit)))
+                                                          QTableWidgetItem(hmmHit))
 
         for cluster, hitDict in filteredClusters.items():
             blastScore = 0
@@ -2346,9 +2353,9 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             for idx in range(self.searchList.rowCount()):
                 if self.searchList.item(idx, 0).text() == 'HMMER Hits':
                     if self.searchList.item(idx,2).checkState()== 2:
-                        requiredHmmList.append(tuple(sorted(self.searchList.item(idx, 1).text().split(' and '))))
+                        requiredHmmList.append(self.searchList.item(idx, 1).text())
                     else:
-                        optionalHmmList.append(tuple(sorted(self.searchList.item(idx, 1).text().split(' and '))))
+                        optionalHmmList.append(self.searchList.item(idx, 1).text())
                 elif self.searchList.item(idx, 0).text() == 'GENE':
                     if self.searchList.item(idx, 2).checkState() == 2:
                         requiredBlastList.append(self.searchList.item(idx, 1).text())
@@ -2504,11 +2511,11 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 del self.forBLAST[termToRemove]
                 self.searchList.removeRow(self.searchList.currentRow())
             elif itemType == 'HMMER Hits':
-                hmmKey = tuple(sorted(termToRemove.split(' and ')))
+                hmmKey = termToRemove
                 hmmerSearchTerms = Counter()
                 for idx in range(self.searchList.rowCount()):
                     if self.searchList.item(idx,0).text() == 'HMMER Hits':
-                        hmmerSearchTerms[tuple(sorted(self.searchList.item(idx,1).text().split(' and ')))] += 1
+                        hmmerSearchTerms[self.searchList.item(idx,1).text()] += 1
                 if hmmerSearchTerms[hmmKey] <= 1:
                     del self.forHmmer[hmmKey]
                 if self.verbose: print(self.forHmmer)
@@ -2601,33 +2608,51 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 self.searchList.resizeColumnsToContents()
                 self.forBLAST[gene.text()] = self.geneDict[gene.text()]
                 self.updateSpinBox()
-    def loadHMM(self):
-        # hmmDict -> {(hmmset):set(paths to hmms)}
-        hmmsToAdd = tuple(sorted(hmmObject.text() for hmmObject in self.hmmList.selectedItems()))
-        if hmmsToAdd:
-            if self.searchList.rowCount() == 0:
-                self.hitsNeededSpinBox.setRange(1, 1)
-                self.hitsNeededSpinBox.setEnabled(True)
-            self.forHmmer[hmmsToAdd] = set(self.hmmDict[hmm] for hmm in hmmsToAdd)
-            currentRowCount = self.searchList.rowCount()
-            checkbox = QTableWidgetItem()
-            checkbox.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEditable | Qt.ItemIsEnabled)
-            checkbox.setCheckState(2)
-            self.searchList.insertRow(currentRowCount)
-            self.searchList.setItem(currentRowCount, 0, QTableWidgetItem('HMMER Hits'))
-            self.searchList.setItem(currentRowCount, 1, QTableWidgetItem(' and '.join(hmmsToAdd)))
-            self.searchList.setItem(currentRowCount, 2, checkbox)
-            self.searchList.resizeColumnsToContents()
-            self.updateSpinBox()
-            if self.verbose:
-                print('For Hmmer:',self.forHmmer)
-            self.hmmList.clearSelection()
+    def showHmmRuleWin(self):
+        self.addHmmRuleWin = addHmmRuleWindow()
+        self.addHmmRuleWin.setWindowModality(Qt.ApplicationModal)
+        self.addHmmRuleWin.addHmmRuleBtn.clicked.connect(lambda: self.loadHmmRule(self.addHmmRuleWin))
+        self.addHmmRuleWin.show()
+
+    def loadHmmRule(self,hmmRuleWin):
+        hmmRule = hmmRuleWin.hmmRule.text()
+        if hmmRule:
+            try:
+                rule = HmmParser(hmmRule,hmmSet=set(self.hmmDict.keys()))
+                hmmInRule = tuple(sorted(rule.identifiers))
+                self.forHmmer[hmmInRule] = set(self.hmmDict[hmm] for hmm in rule.identifiers)
+
+                if self.searchList.rowCount() == 0:
+                    self.hitsNeededSpinBox.setRange(1, 1)
+                    self.hitsNeededSpinBox.setEnabled(True)
+
+                currentRowCount = self.searchList.rowCount()
+                checkbox = QTableWidgetItem()
+                checkbox.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEditable | Qt.ItemIsEnabled)
+                checkbox.setCheckState(2)
+                self.searchList.insertRow(currentRowCount)
+                self.searchList.setItem(currentRowCount, 0, QTableWidgetItem('HMMER Hits'))
+                self.searchList.setItem(currentRowCount, 1, QTableWidgetItem(hmmRule))
+                self.searchList.setItem(currentRowCount, 2, checkbox)
+                self.searchList.resizeColumnsToContents()
+                self.updateSpinBox()
+                if self.verbose:
+                    print('For Hmmer:',self.forHmmer)
+                hmmRuleWin.close()
+            except Exception as e:
+                print(e)
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setText('Unable to Parse HMM Rule')
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec()
         else:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Warning)
-            msg.setText('No HMMs Selected')
+            msg.setText('No Rule Entered')
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
+
     def clearGeneFilePath(self):
         self.GeneFilePath.setText('')
     def clearHmmFilePath(self):
@@ -3048,7 +3073,7 @@ def main():
     hmmBuildExec = os.path.join(runDir,'hmmbuild')
 
     app = QApplication(sys.argv)
-    form = mainApp(makeblastdbExec,blastExec,hmmFetchExec,hmmSearchExec,hmmBuildExec,runDir)
+    form = mainApp(makeblastdbExec,blastExec,hmmFetchExec,hmmSearchExec,hmmBuildExec,runDir,verbose=True)
     form.show()
     app.exec_()
 

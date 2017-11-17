@@ -24,7 +24,7 @@
       </widget>
      </item>
      <item>
-      <widget class="QLineEdit" name="geneName"/>
+      <widget class="QLineEdit" name="hmmRule"/>
      </item>
     </layout>
    </item>
