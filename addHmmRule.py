@@ -11,7 +11,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_addHmmRuleWindow(object):
     def setupUi(self, addHmmRuleWindow):
         addHmmRuleWindow.setObjectName("addHmmRuleWindow")
-        addHmmRuleWindow.resize(413, 89)
+        addHmmRuleWindow.resize(450, 179)
         self.verticalLayout = QtWidgets.QVBoxLayout(addHmmRuleWindow)
         self.verticalLayout.setObjectName("verticalLayout")
         self.horizontalLayout = QtWidgets.QHBoxLayout()
@@ -42,6 +42,16 @@ class Ui_addHmmRuleWindow(object):
         self.closeBtn.setObjectName("closeBtn")
         self.horizontalLayout_3.addWidget(self.closeBtn)
         self.verticalLayout.addLayout(self.horizontalLayout_3)
+        self.horizontalLayout_2 = QtWidgets.QHBoxLayout()
+        self.horizontalLayout_2.setObjectName("horizontalLayout_2")
+        self.label_2 = QtWidgets.QLabel(addHmmRuleWindow)
+        self.label_2.setObjectName("label_2")
+        self.horizontalLayout_2.addWidget(self.label_2)
+        self.availableHmmList = QtWidgets.QListWidget(addHmmRuleWindow)
+        self.availableHmmList.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.availableHmmList.setObjectName("availableHmmList")
+        self.horizontalLayout_2.addWidget(self.availableHmmList)
+        self.verticalLayout.addLayout(self.horizontalLayout_2)
 
         self.retranslateUi(addHmmRuleWindow)
         self.closeBtn.clicked.connect(addHmmRuleWindow.close)
@@ -53,4 +63,5 @@ class Ui_addHmmRuleWindow(object):
         self.label.setText(_translate("addHmmRuleWindow", "Rule:"))
         self.addHmmRuleBtn.setText(_translate("addHmmRuleWindow", "Add HMM Rule"))
         self.closeBtn.setText(_translate("addHmmRuleWindow", "Close"))
+        self.label_2.setText(_translate("addHmmRuleWindow", "HMMs"))
 

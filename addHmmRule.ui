@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>413</width>
-    <height>89</height>
+    <width>450</width>
+    <height>179</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -53,6 +53,24 @@
        </property>
        <property name="text">
         <string>Close</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_2">
+     <item>
+      <widget class="QLabel" name="label_2">
+       <property name="text">
+        <string>HMMs</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QListWidget" name="availableHmmList">
+       <property name="editTriggers">
+        <set>QAbstractItemView::NoEditTriggers</set>
        </property>
       </widget>
      </item>

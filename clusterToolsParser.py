@@ -63,6 +63,8 @@ class Tokeniser():
     mapping = {"(" : TokenTypes.GROUP_OPEN, ")" : TokenTypes.GROUP_CLOSE,
                "[" : TokenTypes.LIST_OPEN, "]" : TokenTypes.LIST_CLOSE,
                "and" : TokenTypes.AND, "or" : TokenTypes.OR,
+               "AND": TokenTypes.AND, "OR": TokenTypes.OR, "NOT" : TokenTypes.NOT,
+               "And": TokenTypes.AND, "Or": TokenTypes.OR, "Not": TokenTypes.NOT,
                "not" : TokenTypes.NOT, "," : TokenTypes.COMMA,
                "minimum" : TokenTypes.MINIMUM, "cds" : TokenTypes.CDS,
                "minscore" : TokenTypes.SCORE, "domstr": TokenTypes.STRING}
@@ -508,8 +510,8 @@ def prepareRulesByIdDict(hmmResults,cutoff):
     return results_by_id
 #
 #
-test = HmmParser('(KS_DOMAIN and AT_DOMAIN) or (C_DOMAIN and A_DOMAIN) and R_DOMAIN',hmmSet={'AT_DOMAIN', 'A_DOMAIN', 'R_DOMAIN', 'C_DOMAIN', 'KS_DOMAIN'})
-print(test.identifiers)
+# test = HmmParser('(KS_DOMAIN and AT_DOMAIN) or (C_DOMAIN and A_DOMAIN) and R_DOMAIN',hmmSet={'AT_DOMAIN', 'A_DOMAIN', 'R_DOMAIN', 'C_DOMAIN', 'KS_DOMAIN'})
+# print(test.identifiers)
 #
 # prots = clusterAnalysis.add_sequences('/Users/emzodls/Dropbox/Lab/Warwick/genomes/mibig/mibig13CDS.fasta',{})
 # prots = clusterAnalysis.parse_hmmsearch_domtbl_anot('/Users/emzodls/Dropbox/Lab/Warwick/genomes/mibig/'

@@ -667,7 +667,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
 
         self.addGeneBtn.clicked.connect(self.loadGene)
         self.addHmmRuleBtn.clicked.connect(self.showHmmRuleWin)
-
+        self.andHMMBtn.clicked.connect(self.addAndHMMrule)
         self.removeSearchTermBtn.clicked.connect(self.removeSearchTerm)
 
         self.clearGeneBtn.clicked.connect(self.clearGene)
@@ -681,13 +681,14 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.outputDirectorySelector.currentIndexChanged.connect(self.outdirFunction)
         ###### Saved Results Variables
         self.SavedResultSummary = dict()
-        self.savedResultsBtns = [self.savedAddGeneBtn,self.savedAddHmmBtn,self.savedRemoveSearchTermBtn,
+        self.savedResultsBtns = [self.savedAddGeneBtn,self.savedAndHmmRuleBtn,self.savedAddHmmRuleBtn,self.savedRemoveSearchTermBtn,
                                  self.savedParamsBtn,self.runSavedSearchBtn]
 
         self.savedResultsSelector.currentIndexChanged.connect(self.loadResults)
         self.savedSearchList.itemChanged.connect(self.updateSavedSpinBox)
         self.savedAddGeneBtn.clicked.connect(self.savedAddGene)
-        self.savedAddHmmBtn.clicked.connect(self.savedAddHmm)
+        self.savedAddHmmRuleBtn.clicked.connect(self.savedShowHmmRuleWin)
+        self.savedAndHmmRuleBtn.clicked.connect(self.savedAddAndHmmRule)
         self.savedRemoveSearchTermBtn.clicked.connect(self.savedRemoveSearchTerm)
         self.savedParamsBtn.clicked.connect(self.editSavedSearchParams)
         self.runSavedSearchBtn.clicked.connect(self.runSavedSearch)
@@ -2612,7 +2613,57 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.addHmmRuleWin = addHmmRuleWindow()
         self.addHmmRuleWin.setWindowModality(Qt.ApplicationModal)
         self.addHmmRuleWin.addHmmRuleBtn.clicked.connect(lambda: self.loadHmmRule(self.addHmmRuleWin))
+        self.addHmmRuleWin.availableHmmList.doubleClicked.connect(lambda x: self.getHmmText(x,self.addHmmRuleWin))
+        for hmm in (self.hmmList.item(idx).text() for idx in range(self.hmmList.count())):
+            self.addHmmRuleWin.availableHmmList.addItem(hmm)
         self.addHmmRuleWin.show()
+
+    def getHmmText(self,idx,hmmWin):
+        hmm = hmmWin.availableHmmList.item(idx.row()).text()
+        oldRule = hmmWin.hmmRule.text()
+        newRule = oldRule + ' ' + hmm
+        hmmWin.hmmRule.setText(newRule)
+        hmmWin.availableHmmList.clearSelection()
+
+    def addAndHMMrule(self):
+        hmmsToAdd = tuple(sorted(hmmObject.text() for hmmObject in self.hmmList.selectedItems()))
+        hmmRule  = ' and '.join(hmmsToAdd)
+        if hmmsToAdd:
+            try:
+                rule = HmmParser(hmmRule,hmmSet=set(self.hmmDict.keys()))
+                hmmInRule = tuple(sorted(rule.identifiers))
+                self.forHmmer[hmmInRule] = set(self.hmmDict[hmm] for hmm in rule.identifiers)
+
+                if self.searchList.rowCount() == 0:
+                    self.hitsNeededSpinBox.setRange(1, 1)
+                    self.hitsNeededSpinBox.setEnabled(True)
+
+                currentRowCount = self.searchList.rowCount()
+                checkbox = QTableWidgetItem()
+                checkbox.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEditable | Qt.ItemIsEnabled)
+                checkbox.setCheckState(2)
+                self.searchList.insertRow(currentRowCount)
+                self.searchList.setItem(currentRowCount, 0, QTableWidgetItem('HMMER Hits'))
+                self.searchList.setItem(currentRowCount, 1, QTableWidgetItem(hmmRule))
+                self.searchList.setItem(currentRowCount, 2, checkbox)
+                self.searchList.resizeColumnsToContents()
+                self.updateSpinBox()
+                if self.verbose:
+                    print('For Hmmer:',self.forHmmer)
+                self.hmmList.clearSelection()
+            except Exception as e:
+                print(e)
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setText('Unable to Parse HMM Rule')
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec()
+        else:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Warning)
+            msg.setText('No HMMs Selected')
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
 
     def loadHmmRule(self,hmmRuleWin):
         hmmRule = hmmRuleWin.hmmRule.text()
@@ -2806,29 +2857,83 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 self.savedSearchGenes.add(gene.text())
                 self.updateSavedSpinBox()
 
-    def savedAddHmm(self):
+    def savedShowHmmRuleWin(self):
+        self.addHmmRuleWin = addHmmRuleWindow()
+        self.addHmmRuleWin.setWindowModality(Qt.ApplicationModal)
+        self.addHmmRuleWin.addHmmRuleBtn.clicked.connect(lambda: self.savedAddHmmRule(self.addHmmRuleWin))
+        self.addHmmRuleWin.availableHmmList.doubleClicked.connect(lambda x: self.getHmmText(x,self.addHmmRuleWin))
+        for hmm in (self.savedHmmList.item(idx).text() for idx in range(self.savedHmmList.count())):
+            self.addHmmRuleWin.availableHmmList.addItem(hmm)
+        self.addHmmRuleWin.show()
+
+    def savedAddAndHmmRule(self):
         hmmsToAdd = tuple(sorted(hmmObject.text() for hmmObject in self.savedHmmList.selectedItems()))
+        hmmRule = ' and '.join(hmmsToAdd)
         if hmmsToAdd:
-            if self.savedSearchList.rowCount() == 0:
-                self.savedHitsNeededSpinBox.setRange(1, 1)
-                self.savedHitsNeededSpinBox.setEnabled(True)
-            currentRowCount = self.savedSearchList.rowCount()
-            checkbox = QTableWidgetItem()
-            checkbox.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEditable | Qt.ItemIsEnabled)
-            checkbox.setCheckState(2)
-            self.savedSearchList.insertRow(currentRowCount)
-            self.savedSearchList.setItem(currentRowCount, 0, QTableWidgetItem('HMMER Hits'))
-            self.savedSearchList.setItem(currentRowCount, 1, QTableWidgetItem(' and '.join(hmmsToAdd)))
-            self.savedSearchList.setItem(currentRowCount, 2, checkbox)
-            self.savedSearchList.resizeColumnsToContents()
-            self.updateSavedSpinBox()
-            self.savedHmmList.clearSelection()
+            try:
+                rule = HmmParser(hmmRule, hmmSet=set(self.savedHmmList.item(idx).text()
+                                                     for idx in range(self.savedHmmList.count())))
+                if self.savedSearchList.rowCount() == 0:
+                    self.savedHitsNeededSpinBox.setRange(1, 1)
+                    self.savedHitsNeededSpinBox.setEnabled(True)
+                currentRowCount = self.savedSearchList.rowCount()
+                checkbox = QTableWidgetItem()
+                checkbox.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEditable | Qt.ItemIsEnabled)
+                checkbox.setCheckState(2)
+                self.savedSearchList.insertRow(currentRowCount)
+                self.savedSearchList.setItem(currentRowCount, 0, QTableWidgetItem('HMMER Hits'))
+                self.savedSearchList.setItem(currentRowCount, 1, QTableWidgetItem(hmmRule))
+                self.savedSearchList.setItem(currentRowCount, 2, checkbox)
+                self.savedSearchList.resizeColumnsToContents()
+                self.updateSavedSpinBox()
+                self.savedHmmList.clearSelection()
+            except Exception as e:
+                print(e)
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setText('Unable to Parse HMM Rule')
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec()
         else:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Warning)
             msg.setText('No HMMs Selected')
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
+    def savedAddHmmRule(self,hmmRuleWin):
+        hmmRule = hmmRuleWin.hmmRule.text()
+        if hmmRule:
+            try:
+                rule = HmmParser(hmmRule, hmmSet=set(self.savedHmmList.item(idx).text()
+                                                     for idx in range(self.savedHmmList.count())))
+                if self.savedSearchList.rowCount() == 0:
+                    self.savedHitsNeededSpinBox.setRange(1, 1)
+                    self.savedHitsNeededSpinBox.setEnabled(True)
+                currentRowCount = self.savedSearchList.rowCount()
+                checkbox = QTableWidgetItem()
+                checkbox.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEditable | Qt.ItemIsEnabled)
+                checkbox.setCheckState(2)
+                self.savedSearchList.insertRow(currentRowCount)
+                self.savedSearchList.setItem(currentRowCount, 0, QTableWidgetItem('HMMER Hits'))
+                self.savedSearchList.setItem(currentRowCount, 1, QTableWidgetItem(hmmRule))
+                self.savedSearchList.setItem(currentRowCount, 2, checkbox)
+                self.savedSearchList.resizeColumnsToContents()
+                self.updateSavedSpinBox()
+                hmmRuleWin.close()
+            except Exception as e:
+                print(e)
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setText('Unable to Parse HMM Rule')
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec()
+        else:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Warning)
+            msg.setText('No Rule Entered')
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+
     def savedRemoveSearchTerm(self):
         if self.savedSearchList.item(self.savedSearchList.currentRow(),0):
             itemType =  self.savedSearchList.item(self.savedSearchList.currentRow(),0).text()
@@ -2841,6 +2946,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             elif itemType == 'HMMER Hits':
                 self.savedSearchList.removeRow(self.savedSearchList.currentRow())
             self.updateSavedSpinBox()
+
     def editSavedSearchParams(self):
         self.savedParamsWin.blastEval.setText(str(self.nameToSavedParamDict[self.savedParamsWin.blastEval.objectName()]))
         self.savedParamsWin.hmmEval.setText(str(self.nameToSavedParamDict[self.savedParamsWin.hmmEval.objectName()]))
@@ -2899,9 +3005,9 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         for idx in range(self.savedSearchList.rowCount()):
             if self.savedSearchList.item(idx, 0).text() == 'HMMER Hits':
                 if self.savedSearchList.item(idx, 2).checkState() == 2:
-                    requiredHmmList.append(tuple(sorted(self.savedSearchList.item(idx, 1).text().split(' and '))))
+                    requiredHmmList.append(self.savedSearchList.item(idx, 1).text())
                 else:
-                    optionalHmmList.append(tuple(sorted(self.savedSearchList.item(idx, 1).text().split(' and '))))
+                    optionalHmmList.append(self.savedSearchList.item(idx, 1).text())
             elif self.savedSearchList.item(idx, 0).text() == 'GENE':
                 if self.savedSearchList.item(idx, 2).checkState() == 2:
                     requiredBlastList.append(self.savedSearchList.item(idx, 1).text())
@@ -3007,6 +3113,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                 self.processSearchListWorker.moveToThread(self.runnerThread)
                 self.processSearchListWorker.start.connect(self.processSearchListWorker.run)
                 self.processSearchListWorker.start.emit()
+
     def closeEvent(self, QCloseEvent):
         quit_msg = "Are you sure you want to exit the program?"
         reply = QMessageBox.question(self, 'Really Quit?',
@@ -3017,6 +3124,7 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             QCloseEvent.accept()
         else:
             QCloseEvent.ignore()
+
     def cleanFiles(self):
         foldersToCheck = [self.outputDirectorySelector.itemText(idx) for idx in range(self.outputDirectorySelector.count())
                           if 'Select Directory...' not in self.outputDirectorySelector.itemText(idx)]
