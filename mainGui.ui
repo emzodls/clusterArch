@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>828</width>
-    <height>817</height>
+    <height>859</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -69,7 +69,7 @@
              <x>0</x>
              <y>0</y>
              <width>774</width>
-             <height>610</height>
+             <height>652</height>
             </rect>
            </property>
            <attribute name="label">
@@ -1540,7 +1540,7 @@
        <attribute name="title">
         <string>Run Search</string>
        </attribute>
-       <layout class="QVBoxLayout" name="verticalLayout_8" stretch="0,0,1,0,1,2,0,0,0,0">
+       <layout class="QVBoxLayout" name="verticalLayout_8" stretch="0,0,0,1,0,1,2,0,0,0,0">
         <item>
          <layout class="QHBoxLayout" name="horizontalLayout">
           <item>
@@ -1572,6 +1572,65 @@
               <string>add database...</string>
              </property>
             </item>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_43">
+          <item alignment="Qt::AlignLeft">
+           <widget class="QLabel" name="label_39">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Fixed" vsizetype="MinimumExpanding">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="text">
+             <string>Index File:</string>
+            </property>
+           </widget>
+          </item>
+          <item alignment="Qt::AlignLeft">
+           <widget class="QLabel" name="idxPath">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Preferred" vsizetype="MinimumExpanding">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="text">
+             <string>None</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="horizontalSpacer_2">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QPushButton" name="generateIdxBtn">
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Fixed" vsizetype="MinimumExpanding">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="text">
+             <string>Generate Index File</string>
+            </property>
            </widget>
           </item>
          </layout>

@@ -658,6 +658,8 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.createDbBtn.clicked.connect(self.createDB)
         self.buildHMMBtn.clicked.connect(self.openBuildHmmWin)
 
+        self.generateIdxBtn.clicked.connect(self.createDbIdx)
+
         self.addGenefilePathBtn.clicked.connect(self.openGene)
         self.addHMMfilePathBtn.clicked.connect(self.openHmm)
         self.addGeneSeqBtn.clicked.connect(self.showAddGeneWin)
@@ -1415,6 +1417,12 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         self.addGeneWin.setWindowModality(Qt.ApplicationModal)
         self.addGeneWin.addGeneBtn.clicked.connect(self.addGeneSeq)
         self.addGeneWin.show()
+
+    def createDbIdx(self):
+        dbPath, dbName = os.path.split(self.pathToDatabase)
+        baseName, ext = os.path.splitext(dbName)
+        generateCtDBIdxFile(self.pathToDatabase, os.path.join(dbPath, baseName + '.ctDB.idx'))
+        self.idxPath.setText(baseName + '.ctDB.idx')
 
     def addGeneSeq(self):
         geneName = self.addGeneWin.geneName.text()
@@ -2547,6 +2555,18 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
             self.pathToDatabase = self.dataBaseSelector.currentText()
         if self.verbose:
             print(self.pathToDatabase)
+        ## check if index file exists
+        dbPath, dbName = os.path.split(self.pathToDatabase)
+        baseName, ext = os.path.splitext(dbName)
+        if os.path.isfile(os.path.join(dbPath, baseName + '.ctDB.idx')):
+            self.idxPath.setText('{}.ctDB.idx'.format(baseName))
+        elif os.access(dbPath, os.W_OK):
+            self.idxPath.setText('None')
+            self.generateIdxBtn.setEnabled(True)
+        else:
+            self.idxPath.setText('None')
+            self.generateIdxBtn.setEnabled(False)
+
     def openGene(self):
         fileName, _ = QFileDialog.getOpenFileName(self,filter="Fasta Files (*.fa *.fasta)")
         if self.verbose: print(fileName)
