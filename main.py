@@ -344,6 +344,16 @@ class runBlastWorker(QObject):
         elif any(True for _ in outdirPhrCheck) and any(True for _ in outdirPinCheck) and any(True for _ in outdirPsqCheck):
             self.makeDB.emit(False)
             dbInOutputFolder = True
+        ### if there's write access to the blast database directory, make the blast database there, otherwise have it in the output directory
+        elif os.access(self.pathToDatabase, os.W_OK):
+            self.makeDB.emit(True)
+            dbInOutputFolder = False
+            out, err, retcode = MakeBlastDB(self.makeblastdbExec, self.pathToDatabase, path, outputDBname)
+            if retcode != 0:
+                self.dbCreated.emit(False)
+                return
+            else:
+                self.dbCreated.emit(True)
         else:
             self.makeDB.emit(True)
             dbInOutputFolder = True
@@ -2526,7 +2536,10 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
                     if self.searchList.item(idx,0).text() == 'HMMER Hits':
                         hmmerSearchTerms[self.searchList.item(idx,1).text()] += 1
                 if hmmerSearchTerms[hmmKey] <= 1:
-                    del self.forHmmer[hmmKey]
+                    rule = HmmParser(hmmKey, hmmSet=set(self.hmmDict.keys()))
+                    hmmInRule = tuple(sorted(rule.identifiers))
+                    if hmmInRule in self.forHmmer:
+                        del self.forHmmer[hmmInRule]
                 if self.verbose: print(self.forHmmer)
                 self.searchList.removeRow(self.searchList.currentRow())
             self.updateSpinBox()

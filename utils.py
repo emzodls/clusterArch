@@ -514,36 +514,6 @@ def createJsonFile(clusters,blastLists,hmmLists,hmmQuerys,hitDict,selfScoreDict,
                     else:
                         queryHit = hitsToConsider[0]
                         proteinDict['color'] = hitColorDict[queryHit]
-                ## first check if protein is a hit for an HMM Request
-                # if any(protein.hit_dict['blast'].get(blastHit) for blastHit in requiredBlast):
-                #     for blastHit in requiredBlast:
-                #         hits = sorted([(blastHit, protein.hit_dict['blast'].get(blastHit) / selfScoreDict[blastHit]) for
-                #                        protein in (hitDict[blastHit] & hitProts)], key=lambda x: x[1], reverse=True)
-                #         proteinDict['hitName'] = [hits[0][0]]
-                #         proteinDict['blastHitScore'] = round(hits[0][1], 3)
-                #         proteinDict['color'] = hitColorDict[hits[0][0]]
-                # elif any(protein.hit_dict['blast'].get(blastHit) for blastHit in optionalBlast):
-                #     for blastHit in optionalBlast:
-                #         hits = sorted([(blastHit, protein.hit_dict['blast'].get(blastHit) / selfScoreDict[blastHit]) for
-                #                        protein in (hitDict[blastHit] & hitProts)], key=lambda x: x[1], reverse=True)
-                #         proteinDict['hitName'] = [hits[0][0]]
-                #         proteinDict['blastHitScore'] = round(hits[0][1], 3)
-                #         proteinDict['color'] = hitColorDict[hits[0][0]]
-                # else:
-                #     for hmmQuery in requiredHMM:
-                #         hmmHitProts = hitDict[hmmQuery]
-                #         if protein in hmmHitProts:
-                #             proteinDict.setdefault('hitName',[])
-                #             proteinDict['hitName'].append(str(hmmQuery))
-                #             proteinDict['color'] = hitColorDict[hmmQuery]
-                #     for hmmQuery in optionalHMM:
-                #         hmmHitProts = hitDict[hmmQuery]
-                #         if protein in hmmHitProts and 'hitName' not in proteinDict:
-                #             proteinDict.setdefault('hitName',[])
-                #             proteinDict['hitName'].append(str(hmmQuery))
-                #             proteinDict['color'] = hitColorDict[hmmQuery]
-                #             proteinDict['color'] = hitColorDict[hmmQuery]
-
                 if 'color' not in proteinDict:
                     proteinDict['color'] = 'rgb(211,211,211)'
 
