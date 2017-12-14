@@ -2547,9 +2547,17 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         if 'Select Directory...' in self.outputDirectorySelector.currentText():
             dirName = QFileDialog.getExistingDirectory(self)
             if dirName:
-                self.outputDirectorySelector.addItem(dirName)
-                self.outputDir = self.outputDirectorySelector.currentText()
-                self.outputDirectorySelector.setCurrentIndex(self.outputDirectorySelector.count()-1)
+                if sys.platform == "darwin" and ' ' in dirName:
+                    msg = QMessageBox()
+                    msg.setIcon(QMessageBox.Critical)
+                    msg.setText("BlastP doesn't support spaces in paths, Please move database to location without a space")
+                    msg.setStandardButtons(QMessageBox.Ok)
+                    msg.exec()
+                    self.outputDirectorySelector.setCurrentIndex(-1)
+                else:
+                    self.outputDirectorySelector.addItem(dirName)
+                    self.outputDir = self.outputDirectorySelector.currentText()
+                    self.outputDirectorySelector.setCurrentIndex(self.outputDirectorySelector.count()-1)
             else:
                 self.outputDirectorySelector.setCurrentIndex(-1)
         if 'Select Directory...' not in self.outputDirectorySelector.currentText():
@@ -2559,9 +2567,17 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
         if 'add database...' in self.dataBaseSelector.currentText():
             fileName, _ = QFileDialog.getOpenFileName(self,filter="Fasta Files (*.fa *.fasta)")
             if fileName:
-                self.dataBaseSelector.addItem(fileName)
-                self.pathToDatabase = self.dataBaseSelector.currentText()
-                self.dataBaseSelector.setCurrentIndex(self.dataBaseSelector.count()-1)
+                if sys.platform == "darwin" and ' ' in fileName:
+                    msg = QMessageBox()
+                    msg.setIcon(QMessageBox.Critical)
+                    msg.setText("BlastP doesn't support spaces in paths, Please move database to location without a space")
+                    msg.setStandardButtons(QMessageBox.Ok)
+                    msg.exec()
+                    self.dataBaseSelector.setCurrentIndex(-1)
+                else:
+                    self.dataBaseSelector.addItem(fileName)
+                    self.pathToDatabase = self.dataBaseSelector.currentText()
+                    self.dataBaseSelector.setCurrentIndex(self.dataBaseSelector.count()-1)
             else:
                 self.dataBaseSelector.setCurrentIndex(-1)
         if 'add database...' not in self.dataBaseSelector.currentText():
