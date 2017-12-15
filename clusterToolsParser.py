@@ -38,6 +38,7 @@ class TokenTypes(IntEnum):
     SCORE = 14
     STRING = 15
     MAXIMUM = 16
+    EXACT = 17
 
     def __repr__(self):
         return self.__str__()
@@ -68,7 +69,8 @@ class Tokeniser():
                "And": TokenTypes.AND, "Or": TokenTypes.OR, "Not": TokenTypes.NOT,
                "not" : TokenTypes.NOT, "," : TokenTypes.COMMA,
                "minimum" : TokenTypes.MINIMUM, "cds" : TokenTypes.CDS,
-               "minscore" : TokenTypes.SCORE, "domstr": TokenTypes.STRING, 'maximum': TokenTypes.MAXIMUM}
+               "minscore" : TokenTypes.SCORE, "domstr": TokenTypes.STRING, 'maximum': TokenTypes.MAXIMUM,
+               'exactly': TokenTypes.EXACT}
 
     def __init__(self, text):
         """ Processes the given text into a list of tokens """
@@ -248,6 +250,25 @@ class MaximumCondition(Conditions):
 
     def __str__(self):
         return "{}maximum({}, [{}])".format("not " if self.negated else "",
+                self.count, ", ".join(sorted(list(self.options))))
+
+class ExactCondition(Conditions):
+
+    ### need HMM counter in protein structure
+    def __init__(self, negated, count, options):
+        self.count = count
+        self.options = set(options)
+        if len(self.options) != len(options):
+            raise ValueError("Exact Domain condition cannot have repeated options")
+        super().__init__(negated)
+
+    def is_satisfied(self, protein):
+        domCtr = protein.getDomCts('hmm')
+        hit_count = sum(domCtr[option] for option in self.options)
+        return self.negated ^ hit_count == self.count
+
+    def __str__(self):
+        return "{}exactly({}, [{}])".format("not " if self.negated else "",
                 self.count, ", ".join(sorted(list(self.options))))
 
 class SingleCondition(Conditions):
@@ -444,6 +465,8 @@ class HmmParser():
             return self._parse_minimum(negated=negated)
         elif self.current_token.type == TokenTypes.MAXIMUM:
             return self._parse_maximum(negated=negated)
+        elif self.current_token.type == TokenTypes.EXACT:
+            return self._parse_exact(negated=negated)
         elif self.current_token.type == TokenTypes.SCORE:
             return self._parse_score(negated=negated)
         elif self.current_token.type == TokenTypes.STRING:
@@ -507,6 +530,23 @@ class HmmParser():
         options = self._parse_list()
         self._consume(TokenTypes.GROUP_CLOSE)
         return MaximumCondition(negated, count, options)
+
+    def _parse_exact(self, negated=False):
+        """
+            EXACT = EXACT_LABEL GROUP_OPEN
+                  count:INT COMMA
+                  LIST COMMA
+                  GROUP_CLOSE;
+        """
+        initial_token = self.current_token
+        self._consume(TokenTypes.EXACT)
+        self._consume(TokenTypes.GROUP_OPEN)
+        count = self._consume(TokenTypes.INT)
+        self._consume(TokenTypes.COMMA)
+        options = self._parse_list()
+        self._consume(TokenTypes.GROUP_CLOSE)
+        return ExactCondition(negated, count, options)
+
 
     def _parse_domstr(self,negated=False):
         """
