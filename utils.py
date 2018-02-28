@@ -786,6 +786,87 @@ def proccessGbks(taskList,outputDir,commonName=False,guiSignal=None):
             pass
     return failedToProcess
 
+def processClusterGenbank(clusterGbk,outputFile=None):
+    # assumes that genbank has CDS annotations
+    genbank_entries = SeqIO.parse(open(clusterGbk), "genbank")
+    path,fileName = os.path.split(clusterGbk)
+    species_base,ext = os.path.splitext(fileName)
+    cds_ctr = 0
+    entry_ctr = 1
+    for genbank_entry in genbank_entries:
+        prot_seqs = []
+        species_id = species_base + '.entry%.4i' % entry_ctr
+        CDS_list = (feature for feature in genbank_entry.features if feature.type == 'CDS')
+        for CDS in CDS_list:
+            cds_ctr += 1
+            direction = CDS.location.strand
+            # Ensure that you don't get negative values, Biopython parser will not ignore slices that are greater
+            # than the entry so you don't need to worry about the other direction
+            internal_id = "%s_ORF_%.5i" % (species_id, cds_ctr)
+            protein_id = internal_id
+            gene_start = max(0, CDS.location.nofuzzy_start)
+            gene_end = max(0, CDS.location.nofuzzy_end)
+            # Try to find a common name for the promoter, otherwise just use the internal ID
+            if 'translation' in CDS.qualifiers.keys():
+                prot_seq = Seq(CDS.qualifiers['translation'][0])
+                if direction == 1:
+                    direction_id = '+'
+                else:
+                    direction_id = '-'
+            else:
+                genbank_seq = CDS.location.extract(genbank_entry)
+                nt_seq = genbank_seq.seq
+                if direction == 1:
+                    direction_id = '+'
+                    # for protein sequence if it is at the start of the entry assume that end of sequence is in frame
+                    # if it is at the end of the genbank entry assume that the start of the sequence is in frame
+                    if gene_start == 0:
+                        if len(nt_seq) % 3 == 0:
+                            prot_seq = nt_seq.translate()
+                        elif len(nt_seq) % 3 == 1:
+                            prot_seq = nt_seq[1:].translate()
+                        else:
+                            prot_seq = nt_seq[2:].translate()
+                    else:
+                        prot_seq = nt_seq.translate()
+                if direction == -1:
+                    direction_id = '-'
+                    nt_seq = genbank_seq.seq
+                    if gene_start == 0:
+                        prot_seq = nt_seq.translate()
+                    else:
+                        if len(nt_seq) % 3 == 0:
+                            prot_seq = nt_seq.translate()
+                        elif len(nt_seq) % 3 == 1:
+                            prot_seq = nt_seq[:-1].translate()
+                        else:
+                            prot_seq = nt_seq[:-2].reverse_complement().translate()
+                # Write protein file
+            if len(prot_seq) > 0:
+                prot_entry = SeqRecord(prot_seq, id='%s:%i-%i:%s' % (internal_id, gene_start + 1,
+                                                                     gene_end, direction_id,
+                                                                     ))
+                prot_seqs.append(prot_entry)
+        entry_ctr += 1
+    if outputFile:
+        with open(outputFile, 'w') as outfile_handle:
+            SeqIO.write(prot_seqs, outfile_handle, 'fasta')
+
+    return {protein_seq.id:protein_seq.seq for protein_seq in prot_seqs}
+
+def runPfamHmmScan(fastaPath,hmmPath):
+    hmmFile = os.path.join(hmmPath,'Pfam-A.hmm')
+    if os.path.isfile(hmmFile):
+        outfile = os.path.splitext(fastaPath)[0] + '.domtbl'
+    command = ['hmmscan','--cpu',"0",'--domtblout',outfile, '--noali',
+               '--cut_tc', hmmFile, fastaPath]
+    out,err,retcode = execute(command)
+    if retcode != 0:
+        print(out,err,retcode)
+        return False
+    else:
+        return True
+
 def ncbiGenomeFastaParser(fastaHandle):
     # returns a fasta dictionary with entry as title and sequence as output
     sequence = ''
