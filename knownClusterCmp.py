@@ -5,6 +5,7 @@
 
 
 from utils import proccessGbks
+from difflib import SequenceMatcher
 
 
 def cluster_distance_lcs(A, B, A_domlist, B_domlist, dcg_A, dcg_b, core_pos_A, core_pos_b, go_A, go_b, bgc_class):
