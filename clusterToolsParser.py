@@ -39,6 +39,7 @@ class TokenTypes(IntEnum):
     STRING = 15
     MAXIMUM = 16
     EXACT = 17
+    SIZE = 18
 
     def __repr__(self):
         return self.__str__()
@@ -70,6 +71,7 @@ class Tokeniser():
                "not" : TokenTypes.NOT, "," : TokenTypes.COMMA,
                "minimum" : TokenTypes.MINIMUM, "cds" : TokenTypes.CDS,
                "minscore" : TokenTypes.SCORE, "domstr": TokenTypes.STRING, 'maximum': TokenTypes.MAXIMUM,
+               "minSize" :TokenTypes.SIZE,
                'exactly': TokenTypes.EXACT}
 
     def __init__(self, text):
@@ -232,6 +234,21 @@ class MinimumCondition(Conditions):
     def __str__(self):
         return "{}minimum({}, [{}])".format("not " if self.negated else "",
                 self.count, ", ".join(sorted(list(self.options))))
+
+class SizeCondition(Conditions):
+    def __init__(self, negated, size):
+        self.size = size
+        if size <= 0:
+            raise ValueError("Please enter a valid amino acid size")
+        super().__init__(negated)
+
+    def is_satisfied(self, protein):
+        protSize = protein.size()
+        return self.negated ^ protSize >= self.size
+
+    def __str__(self):
+        return "{}at least {} residues long".format("not " if self.negated else "",
+                self.size)
 
 class MaximumCondition(Conditions):
 
@@ -467,6 +484,8 @@ class HmmParser():
             return self._parse_maximum(negated=negated)
         elif self.current_token.type == TokenTypes.EXACT:
             return self._parse_exact(negated=negated)
+        elif self.current_token.type == TokenTypes.SIZE:
+            return self._parse_size(negated=negated)
         elif self.current_token.type == TokenTypes.SCORE:
             return self._parse_score(negated=negated)
         elif self.current_token.type == TokenTypes.STRING:
@@ -485,6 +504,16 @@ class HmmParser():
         score = self._consume(TokenTypes.INT)
         self._consume(TokenTypes.GROUP_CLOSE)
         return ScoreCondition(negated, ident, score)
+
+    def _parse_size(self,negated=False):
+        """
+        MINSIZE = minSize GROUP_OPEN INT GROUP_CLOSE
+        """
+        self._consume(TokenTypes.SIZE)
+        self._consume(TokenTypes.GROUP_OPEN)
+        minSize = self._consume(TokenTypes.INT)
+        self._consume(TokenTypes.GROUP_CLOSE)
+        return SizeCondition(negated,minSize)
 
     def _parse_group(self):
         """

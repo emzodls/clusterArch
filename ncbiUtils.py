@@ -22,8 +22,9 @@
 '''
 import urllib.request
 import xml.etree.ElementTree as etree
-import os
+import os,io
 from ftplib import FTP
+from Bio import SeqIO
 from math import floor,ceil
 
 def ncbiQuery(keyword,organism,accession,minLength=0,maxLength=10000000000,retmax=1000,db='nuccore'):
@@ -321,6 +322,31 @@ def protToFasta(proteinList,outfile):
         fetchReq = urllib.request.urlopen(fetchURL)
         with open(outfile, 'a') as output:
             output.write(extract_records(fetchReq))
+
+def fetchNtSeqWithAcc(acc,coordinates):
+    (start, end), direction = coordinates
+    acc2ncbi = dict()
+    dirCode = {'+':1,'-':2}
+    failed = list()
+    esearchURL = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db={}&term={}[accn]" \
+                     "&retmode=text&retmax=10&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format('nuccore',acc)
+    try:
+        if acc not in acc2ncbi.keys():
+            ncbiRequest = urllib.request.urlopen(esearchURL)
+            parseRequest = etree.parse(ncbiRequest)
+            ncbiID = [idElem.text for idElem in parseRequest.iter('Id')][0]
+            acc2ncbi[acc] = ncbiID
+        else:
+            ncbiID = acc2ncbi[acc]
+
+        fetchURL = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id={}" \
+                   "&retmode=text&rettype=fasta&strand={}&seq_start={}&seq_stop={}" \
+                   "&retmax=251&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(ncbiID,dirCode[direction],start,end)
+        fetchReq = urllib.request.urlopen(fetchURL)
+        sequence = SeqIO.read(io.TextIOWrapper(fetchReq,encoding='utf-8'),'fasta')
+    except:
+        return None
+    return sequence
 
 if __name__ == '__main__':
     clusterList = []
