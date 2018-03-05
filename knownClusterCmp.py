@@ -6,6 +6,182 @@
 
 from utils import proccessGbks
 from difflib import SequenceMatcher
+import numpy as np
+from Bio import pairwise2
+from Bio.SubsMat.MatrixInfo import pam250 as scoring_matrix
+from scipy.optimize import linear_sum_assignment
+
+
+def find_clus_comparison_slice(clusterA,clusterB,anot_id):
+    directionsA, indicesA, domStrsA, numGenesA = zip(*clusterA.retDomComp(anot_id))
+    directionsB, indicesB, domStrsB, numGenesB = zip(*clusterB.retDomComp(anot_id))
+    bestI = None
+    bestJ = None
+    bestII = None
+    bestJI = None
+    size = 0
+    for i, domStrA in enumerate(domStrsA):
+        for j, domStrB in enumerate(domStrsB):
+            seqmatch = SequenceMatcher(None, domStrA, domStrB)
+            iIdx, jIdx, subLen = seqmatch.find_longest_match(0, len(domStrA), 0, len(domStrB))
+            if subLen >= size:
+                bestI = i
+                bestJ = j
+                bestII = iIdx
+                bestJI = jIdx
+                size = subLen
+    return size,bestI,bestJ,directionsA[bestI],directionsB[bestJ],indicesA[bestI],indicesB[bestJ],numGenesA[bestI],numGenesB[bestJ]
+
+
+
+def calculate_distance(clusterA,clusterB, anot_id,anchor_domains=set(),unknown_dom = 'UNK',weights = (0.2, 0.75, 0.05, 2.0)):
+    Jaccardw, DSSw, AIw, anchorboost = weights
+
+    clusterAdict = clusterA.retDomDict(anot_id)
+    clusterBdict = clusterB.retDomDict(anot_id)
+
+    clusterAdoms = set(dom for dom in clusterAdict.keys() if dom != unknown_dom)
+    clusterBdoms = set(dom for dom in clusterBdict.keys() if dom != unknown_dom)
+
+    intersect = clusterAdoms & clusterBdoms
+
+    jaccardScore = len(intersect)/(len(clusterAdoms) + len(clusterBdoms))
+
+    domain_difference_anchor, S_anchor = 0, 0
+    domain_difference, S = 0, 0
+
+    not_intersect = clusterAdoms.symmetric_difference(clusterBdoms)
+
+    # Case 1
+    # no need to look at seq identity, since these domains are unshared
+    for unshared_domain in not_intersect:
+        if unshared_domain != unknown_dom:
+            # for each occurence of an unshared domain do domain_difference += count
+            # of domain and S += count of domain
+            unshared_occurrences = []
+
+            try:
+                num_unshared = len(clusterAdict[unshared_domain])
+            except KeyError:
+                num_unshared = len(clusterBdict[unshared_domain])
+
+            # don't look at domain version, hence the split
+            if unshared_domain in anchor_domains:
+                domain_difference_anchor += num_unshared
+            else:
+                domain_difference += num_unshared
+
+    S = domain_difference  # can be done because it's the first use of these
+    S_anchor = domain_difference_anchor
+
+    # Cases 2 and 3 (now merged)
+    missing_aligned_domain_files = []
+    for shared_domain in intersect:
+        if shared_domain != 'UNK':
+            specific_domain_list_A = clusterAdict[shared_domain]
+            specific_domain_list_B = clusterBdict[shared_domain]
+
+            num_copies_a = len(specific_domain_list_A)
+            num_copies_b = len(specific_domain_list_B)
+
+            indicesA,seqsA = zip(*list(specific_domain_list_A.items()))
+            indicesB, seqsB = zip(*list(specific_domain_list_B.items()))
+
+            # Fill distance matrix between domain's A and B versions
+            DistanceMatrix = np.ndarray((num_copies_a, num_copies_b))
+            for domsa in range(num_copies_a):
+                for domsb in range(num_copies_b):
+                    seq_length = 0
+                    matches = 0
+                    gaps = 0
+
+                    alignScore = pairwise2.align.globalds(seqsA[domsa], seqsB[domsb], scoring_matrix, -15, -6.67,
+                                                              one_alignment_only=True)
+                    bestAlignment = alignScore[0]
+                    aligned_seqA = bestAlignment[0]
+                    aligned_seqB = bestAlignment[1]
+
+                    # - Calculate aligned domain sequences similarity -
+                    # Sequences *should* be of the same length unless something went
+                    # wrong elsewhere
+                    if len(aligned_seqA) != len(aligned_seqB):
+                        print("\tWARNING: mismatch in sequences' lengths while calculating sequence identity ({})".format(
+                            shared_domain))
+                        print("\t  Specific domain 1: {} len: {}".format(indicesA[domsa], str(len(aligned_seqA))))
+                        print("\t  Specific domain 2: {} len: {}".format(indicesB[domsb], str(len(aligned_seqB))))
+                        seq_length = min(len(aligned_seqA), len(aligned_seqB))
+                    else:
+                        seq_length = len(aligned_seqA)
+
+                    for position in range(seq_length):
+                        if aligned_seqA[position] == aligned_seqB[position]:
+                            if aligned_seqA[position] != "-":
+                                matches += 1
+                            else:
+                                gaps += 1
+                    DistanceMatrix[domsa][domsb] = 1 - (matches / (seq_length - gaps))
+
+        # Only use the best scoring pairs
+        BestIndexes = linear_sum_assignment(DistanceMatrix)
+        accumulated_distance = DistanceMatrix[BestIndexes].sum()
+        # the difference in number of domains accounts for the "lost" (or not duplicated) domains
+        sum_seq_dist = (abs(num_copies_a - num_copies_b) + accumulated_distance)  # essentially 1-sim
+        normalization_element = max(num_copies_a, num_copies_b)
+
+        if shared_domain in anchor_domains:
+            S_anchor += normalization_element
+            domain_difference_anchor += sum_seq_dist
+        else:
+            S += normalization_element
+            domain_difference += sum_seq_dist
+
+    if S_anchor != 0 and S != 0:
+        DSS_non_anchor = domain_difference / S
+        DSS_anchor = domain_difference_anchor / S_anchor
+
+        # Calculate proper, proportional weight to each kind of domain
+        non_anchor_prct = S / (S + S_anchor)
+        anchor_prct = S_anchor / (S + S_anchor)
+
+        # boost anchor subcomponent and re-normalize
+        non_anchor_weight = non_anchor_prct / (anchor_prct * anchorboost + non_anchor_prct)
+        anchor_weight = anchor_prct * anchorboost / (anchor_prct * anchorboost + non_anchor_prct)
+
+        # Use anchorboost parameter to boost percieved rDSS_anchor
+        DSS = (non_anchor_weight * DSS_non_anchor) + (anchor_weight * DSS_anchor)
+
+    elif S_anchor == 0:
+        DSS_non_anchor = domain_difference / S
+        DSS_anchor = 0.0
+
+        DSS = DSS_non_anchor
+
+    else:  # only anchor domains were found
+        DSS_non_anchor = 0.0
+        DSS_anchor = domain_difference_anchor / S_anchor
+
+        DSS = DSS_anchor
+
+    DSS = 1 - DSS  # transform into similarity
+
+    directionsA, indicesA, domStrsA, numGenesA = zip(*clusterA.retDomComp(anot_id))
+    directionsB, indicesB, domStrsB, numGenesB = zip(*clusterB.retDomComp(anot_id))
+
+    pairsA = set()
+    pairsB = set()
+    for domstr in domStrsA:
+        if len(domstr) >= 2:
+            pairsA.update(tuple(domstr[i:i+2]) for i in range(len(domstr)))
+
+    for domstr in domStrsB:
+        if len(domstr) >= 2:
+            pairsB.update(tuple(domstr[i:i+2]) for i in range(len(domstr)))
+
+    AI = len(pairsA & pairsB) / len(pairsA | pairsB)
+
+    Distance = 1 - (Jaccardw * jaccardScore) - (DSSw * DSS) - (AIw * AI)
+
+    return Distance, jaccardScore, DSS, AI, DSS_non_anchor, DSS_anchor, S, S_anchor
 
 
 def cluster_distance_lcs(A, B, A_domlist, B_domlist, dcg_A, dcg_b, core_pos_A, core_pos_b, go_A, go_b, bgc_class):
