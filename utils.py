@@ -843,8 +843,9 @@ def processClusterGenbank(clusterGbk,outputFile=None):
                             prot_seq = nt_seq[:-2].reverse_complement().translate()
                 # Write protein file
             if len(prot_seq) > 0:
-                prot_entry = SeqRecord(prot_seq, id='%s:%i-%i:%s' % (internal_id, gene_start + 1,
-                                                                     gene_end, direction_id,
+                prot_entry = SeqRecord(prot_seq, id='%s|%i-%i|%s|%s|%s' % (species_id, gene_start + 1,
+                                                                                   gene_end, direction_id,
+                                                                                   internal_id, protein_id
                                                                      ))
                 prot_seqs.append(prot_entry)
         entry_ctr += 1

@@ -5,12 +5,106 @@
 
 
 from utils import proccessGbks
+from collections import defaultdict
+from glob import glob
+import subprocess
 from difflib import SequenceMatcher
 import numpy as np
 from Bio import pairwise2
 from Bio.SubsMat.MatrixInfo import pam250 as scoring_matrix
 from scipy.optimize import linear_sum_assignment
+from clusterTools import clusterAnalysis
+from pickle import load
+import os
 
+
+def mibig_comparison(clusterName,mibigData):
+
+    bgcsToTest = set()
+    clusterBGCdict = dict()
+
+    clusterProts = clusterAnalysis.add_sequences(clusterName+'.fa',{})
+    clusterProts = clusterAnalysis.parse_hmmscan_domtbl_anot(clusterName + '.domtbl',
+                                                               15,'pfam',clusterProts)
+    cluster = clusterAnalysis.clusterProteins(clusterProts.values(),1e6)
+    cluster = list(cluster.values())[0][0]
+    bgc_dict = load(open(mibigData,'rb'))
+
+    # Collect mibig sequences to align
+    for domain,locationDict in cluster.retDomDict('pfam').items():
+        if domain in bgc_dict:
+            clusterBGCdict[domain] = dict()
+            clusterBGCdict[domain].setdefault(clusterName,{})
+            for (idx,(start,stop)),seq in locationDict.items():
+                clusterBGCdict[domain][clusterName][(idx,(start,stop))] = seq
+            for bgc in bgc_dict[domain]:
+                bgcsToTest.add(bgc)
+                clusterBGCdict[domain].setdefault(bgc, {})
+                for (idx,(start,stop)),seq in bgc_dict[domain][bgc]:
+                    clusterBGCdict[domain][bgc][(idx,(start,stop))] = seq
+
+    # Write Fasta files for HMMalign
+    os.mkdir('tmpFastas')
+    for domain,bgcHits in clusterBGCdict.items():
+        with open('tmpFastas/{}.fa'.format(domain),'w') as fastaFile:
+            for bgc in bgcHits.keys():
+                for (geneIdx,(start,stop)),seq in clusterBGCdict[domain][bgc].items():
+                    fastaFile.write('>{}%{}%{}-{}\n{}\n'.format(bgc,geneIdx,start,stop,seq))
+
+    ### use hmmalign to generate the alignments and replace the sequence files with aligned sequences
+    domainFastas = glob('tmpFastas/*.fa')
+    hmmNames = [os.path.splitext(os.path.split(x)[1])[0] for x in domainFastas]
+
+    for domainFasta,hmmName in zip(domainFastas,hmmNames):
+        hmmFetchCmd = ['hmmfetch', '/Users/u1474301/Pfam-A.hmm.h3m', hmmName]
+        hmmalignCmd = ['hmmalign', '-', domainFasta]
+
+        hmmFetchProc = subprocess.Popen(hmmFetchCmd, stdout=subprocess.PIPE)
+        hmmalignProc = subprocess.Popen(hmmalignCmd, stdin=hmmFetchProc.stdout, stdout=subprocess.PIPE)
+        print('Reading {} alignment'.format(hmmName))
+        # parse stk output
+
+        reference = ""
+        algnDict = defaultdict(str)
+
+        for line in hmmalignProc.stdout:
+            line = line.decode()
+            line = line.strip()
+            if line.startswith("#=GC RF"):
+                reference += line[7:].strip()
+            elif line == "":
+                continue
+            elif line[0] == "/" or line[0] == "#":
+                continue
+            else:
+                a = line.split(" ")
+                header = a[0]
+                algn = a[-1]
+                algnDict[header] += algn
+            # get start-end coordinates of every "x" island (original consensus)
+            # in the reference
+            state_reference = False
+            slicing_tuples = []
+
+        for pos in range(len(reference)):
+            if reference[pos] == "x" and not state_reference:
+                state_reference = True
+                start = pos
+            if reference[pos] == "." and state_reference:
+                state_reference = False
+                slicing_tuples.append((start, pos))
+        if state_reference:
+            slicing_tuples.append((start, len(reference)))
+        if len(algnDict) > 0:
+            for header in algnDict:
+                sequence = ""
+                for a, b in slicing_tuples:
+                    sequence += algnDict[header][a:b]
+                bgc, geneIdx, location = header.split('%')
+                geneIdx = int(geneIdx)
+                start,stop = [int(x) for x in location.split('-')]
+                clusterBGCdict[hmmName][bgc][(geneIdx,(start,stop))] = sequence
+    return clusterBGCdict
 
 def find_clus_comparison_slice(clusterA,clusterB,anot_id):
     directionsA, indicesA, domStrsA, numGenesA = zip(*clusterA.retDomComp(anot_id))
@@ -34,7 +128,8 @@ def find_clus_comparison_slice(clusterA,clusterB,anot_id):
 
 
 
-def calculate_distance(clusterA,clusterB, anot_id,anchor_domains=set(),unknown_dom = 'UNK',weights = (0.2, 0.75, 0.05, 2.0)):
+def calculate_distance(clusterA,clusterB, anot_id,anchor_domains=set(),unknown_dom = 'UNK',weights = (0.2, 0.75, 0.05, 2.0)
+                       ,alignedDict = None):
     Jaccardw, DSSw, AIw, anchorboost = weights
 
     clusterAdict = clusterA.retDomDict(anot_id)
