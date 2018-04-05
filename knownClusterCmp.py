@@ -4,8 +4,9 @@
 
 
 
-from utils import proccessGbks
+from utils import processClusterGenbank,runPfamHmmScan
 from collections import defaultdict
+from clusterTools import clusterAnalysis
 from glob import glob
 import subprocess
 from difflib import SequenceMatcher
@@ -17,8 +18,43 @@ from clusterTools import clusterAnalysis
 from pickle import load
 import os
 
+def compareCluster(clusterFile,pfamPath='.',mibigDataObj = 'pfam_bgc_dict.pkl',
+                   mibigDomCtsObj = 'mibigDomCts.pkl',
+                   mibigPairsObj = 'mibigPairs.pkl',
+                   clusterName='tmp',
+                   cleanUp = False,
+                   anchorDomsObj = 'anchor.pkl'):
+    '''
+    given an antismash cluster genbank file, will extract coding sequences to make cds file, and search with
+    specified pfam hmms to prepare for cluster comparison
+    :param clusterFile:
+    :return: None
+    '''
 
-def mibig_comparison(clusterName,mibigData):
+    clusterName = os.path.splitext(os.path.split(clusterFile)[-1])[0]
+    fastaFile = '{}.fa'.format(clusterName)
+    processClusterGenbank(clusterFile,outputFile=fastaFile)
+    runPfamHmmScan(fastaFile,pfamPath)
+    domTblFile = '{}.domtbl'.format(clusterName)
+
+    ## load mibig data
+    mibigData = load(open(mibigDataObj,'rb'))
+    mibigDomCts = load(open(mibigDomCtsObj,'rb'))
+    mibigPairs = load(open(mibigPairsObj,'rb'))
+    anchorDoms = load(open(anchorDomsObj,'rb'))
+
+    clusterObj,mibigIDs,clusterBGCdict = mibig_comparison(clusterName,mibigData,pfamPath=pfamPath)
+    distanceDict = compareMibigClusters(clusterName,clusterObj,mibigIDs,mibigDomCts,mibigPairs,clusterBGCdict,anchorDoms=anchorDoms)
+
+    if cleanUp:
+        os.remove(fastaFile)
+        os.remove(domTblFile)
+        os.removedirs('tmpFastas')
+
+    return distanceDict
+
+
+def mibig_comparison(clusterName,mibigData,pfamPath='.'):
 
     bgcsToTest = set()
     clusterBGCdict = dict()
@@ -28,7 +64,7 @@ def mibig_comparison(clusterName,mibigData):
                                                                15,'pfam',clusterProts)
     cluster = clusterAnalysis.clusterProteins(clusterProts.values(),1e6)
     cluster = list(cluster.values())[0][0]
-    bgc_dict = load(open(mibigData,'rb'))
+    bgc_dict = mibigData
 
     # Collect mibig sequences to align
     for domain,locationDict in cluster.retDomDict('pfam').items():
@@ -56,7 +92,7 @@ def mibig_comparison(clusterName,mibigData):
     hmmNames = [os.path.splitext(os.path.split(x)[1])[0] for x in domainFastas]
 
     for domainFasta,hmmName in zip(domainFastas,hmmNames):
-        hmmFetchCmd = ['hmmfetch', '/Users/u1474301/Pfam-A.hmm.h3m', hmmName]
+        hmmFetchCmd = ['hmmfetch', os.path.join(pfamPath,'Pfam-A.hmm.h3m'), hmmName]
         hmmalignCmd = ['hmmalign', '-', domainFasta]
 
         hmmFetchProc = subprocess.Popen(hmmFetchCmd, stdout=subprocess.PIPE)
@@ -104,7 +140,7 @@ def mibig_comparison(clusterName,mibigData):
                 geneIdx = int(geneIdx)
                 start,stop = [int(x) for x in location.split('-')]
                 clusterBGCdict[hmmName][bgc][(geneIdx,(start,stop))] = sequence
-    return clusterBGCdict
+    return cluster,bgcsToTest,clusterBGCdict
 
 def find_clus_comparison_slice(clusterA,clusterB,anot_id):
     directionsA, indicesA, domStrsA, numGenesA = zip(*clusterA.retDomComp(anot_id))
@@ -127,6 +163,137 @@ def find_clus_comparison_slice(clusterA,clusterB,anot_id):
     return size,bestI,bestJ,directionsA[bestI],directionsB[bestJ],indicesA[bestI],indicesB[bestJ],numGenesA[bestI],numGenesB[bestJ]
 
 
+def compareMibigClusters(clusterName,clusterObj,mibigIDs,mibigDomCts,mibigPairs,alignedDict,
+                         weights = (0.2, 0.75, 0.05, 2.0),anchorDoms = set()):
+
+    Jaccardw, DSSw, AIw, anchorboost = weights
+
+    #clusterDomDict = clusterObj.retDomDict('pfam')
+
+    clusterDomCts = {k:len(v) for k,v in clusterObj.retDomDict('pfam').items()}
+    clusterDoms = set(dom for dom in clusterDomCts.keys())
+
+    distanceDict = dict()
+
+    for mibigCluster in mibigIDs:
+        mibigClusterDomCts = mibigDomCts[mibigCluster]
+        mibigClusterDoms = set(dom for dom in mibigClusterDomCts.keys())
+
+        domDist_Anchor, domCtr_Anchor = 0,0
+        domDist_noAnchor,domCtr_noAnchor = 0,0
+
+        sharedDomains = clusterDoms & mibigClusterDoms
+
+        unsharedDomains = clusterDoms.symmetric_difference(mibigClusterDoms)
+
+        ## calculate Jaccard Score
+
+        jaccardScore = len(sharedDomains) / (len(clusterDoms) + len(mibigClusterDoms))
+
+        ## calculate domain similarity score
+        for unsharedDom in unsharedDomains:
+            domCt = mibigClusterDomCts.get(unsharedDom, 0) + clusterDomCts.get(unsharedDom, 0)
+            if unsharedDom in anchorDoms:
+                domDist_Anchor += domCt
+                domCtr_Anchor += domCt
+            else:
+                domDist_noAnchor += domCt
+                domCtr_noAnchor += domCt
+
+        for sharedDom in sharedDomains:
+            domainDict = alignedDict[sharedDom]
+
+            clusterDomList = domainDict[clusterName]
+            mibigDomList = domainDict[mibigCluster]
+
+            clusterDomCt = len(clusterDomList)
+            mibigDomCt = len(mibigDomList)
+
+            clusterIdxs,clusterSeqs = zip(*list(clusterDomList.items()))
+            mibigIdxs, mibigSeqs = zip(*list(mibigDomList.items()))
+
+            # Fill distance matrix between domain's A and B versions
+            distMatrix = np.ndarray((clusterDomCt, mibigDomCt))
+
+            for clusterDomIdx,clusterSeq in enumerate(clusterSeqs):
+                for mibigDomIdx,mibigSeq in enumerate(mibigSeqs):
+
+                    if len(clusterSeq) != len(mibigSeq):
+                        print("\tWARNING: mismatch in sequences' lengths while calculating sequence identity ({})".format(
+                            sharedDom))
+                        print("\t  Specific domain 1: {} len: {}".format(clusterIdxs[clusterDomIdx], str(len(clusterSeq))))
+                        print("\t  Specific domain 2: {} len: {}".format(mibigIdxs[mibigDomIdx], str(len(mibigSeq))))
+                        seq_length = min(len(clusterSeq), len(mibigSeq))
+                    else:
+                        seq_length = len(clusterSeq)
+
+                    matches = 0
+                    gaps = 0
+                    for position in range(seq_length):
+                        if clusterSeq[position] == mibigSeq[position]:
+                            if clusterSeq[position] != "-":
+                                matches += 1
+                            else:
+                                gaps += 1
+
+                    distMatrix[clusterDomIdx][mibigDomIdx] = 1 - (matches / (seq_length - gaps))
+
+            BestIndexes = linear_sum_assignment(distMatrix)
+            sharedDist = distMatrix[BestIndexes].sum()
+
+            totalDist = (abs(clusterDomCt - mibigDomCt) + sharedDist)
+
+            if sharedDom in anchorDoms:
+                domDist_Anchor += totalDist
+                domCtr_Anchor += max(clusterDomCt,mibigDomCt)
+            else:
+                domDist_noAnchor += totalDist
+                domCtr_noAnchor += max(clusterDomCt,mibigDomCt)
+
+        if domCtr_Anchor != 0 and domCtr_noAnchor != 0:
+            DSS_noAnchor = domDist_noAnchor / domCtr_noAnchor
+            DSS_Anchor = domDist_Anchor / domCtr_Anchor
+
+            # Calculate proper, proportional weight to each kind of domain
+            noAnchorFrac = domCtr_noAnchor / (domCtr_Anchor + domCtr_noAnchor)
+            anchorFrac = domCtr_Anchor / (domCtr_Anchor + domCtr_noAnchor)
+
+            # boost anchor subcomponent and re-normalize
+            noAnchor_weight = noAnchorFrac / (anchorFrac * anchorboost + noAnchorFrac)
+            anchor_weight = anchorFrac * anchorboost / (anchorFrac * anchorboost + noAnchorFrac)
+
+            # Use anchorboost parameter to boost percieved rDSS_anchor
+            DSS = (noAnchor_weight * DSS_noAnchor) + (anchor_weight * DSS_Anchor)
+
+        elif domCtr_Anchor == 0:
+            DSS_noAnchor = domDist_noAnchor / domCtr_noAnchor
+            DSS_Anchor = 0.0
+
+            DSS = DSS_noAnchor
+
+        else:  # only anchor domains were found
+            DSS_noAnchor = 0.0
+            DSS_Anchor = domDist_Anchor / domCtr_Anchor
+
+            DSS = DSS_Anchor
+
+        DSS = 1 - DSS  # transform into similarity
+
+        ## Calculate Adjancency Index
+
+        clusterPairs  = set()
+        dirs, idxs, domStrs, numGenes = zip(*clusterObj.retDomComp('pfam'))
+        for domStr in domStrs:
+            domStr = [x for x in domStr if x != 'UNK']
+            if len(domStr) >= 2:
+                clusterPairs.update(tuple(domStr[i:i + 2]) for i in range(len(domStr)) if len(domStr[i:i + 2]) > 1)
+        AI = len(clusterPairs & mibigPairs[mibigCluster]) / len(clusterPairs | mibigPairs[mibigCluster])
+
+        distance = 1 - (Jaccardw * jaccardScore) - (DSSw * DSS) - (AIw * AI)
+
+        distanceDict[mibigCluster] = (distance, jaccardScore, DSS, AI, DSS_noAnchor, DSS_Anchor, domCtr_noAnchor, domCtr_Anchor)
+
+    return distanceDict
 
 def calculate_distance(clusterA,clusterB, anot_id,anchor_domains=set(),unknown_dom = 'UNK',weights = (0.2, 0.75, 0.05, 2.0)
                        ,alignedDict = None):
@@ -189,9 +356,8 @@ def calculate_distance(clusterA,clusterB, anot_id,anchor_domains=set(),unknown_d
                     seq_length = 0
                     matches = 0
                     gaps = 0
-
                     alignScore = pairwise2.align.globalds(seqsA[domsa], seqsB[domsb], scoring_matrix, -15, -6.67,
-                                                              one_alignment_only=True)
+                                                                 one_alignment_only=True)
                     bestAlignment = alignScore[0]
                     aligned_seqA = bestAlignment[0]
                     aligned_seqB = bestAlignment[1]
