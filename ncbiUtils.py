@@ -27,6 +27,80 @@ from ftplib import FTP
 from Bio import SeqIO
 from math import floor,ceil
 
+def acc2assembly(accList,batchSize=200):
+    '''
+    :param accList: list of assembly numbers corresponding to list of accession numbers
+    :return: list of assembly numbers corresponding to accessions given
+    '''
+    accChunks = [accList[x:x+batchSize] for x in range(0,len(accList),batchSize)]
+
+    acc2ID = {}
+    ID2assembly = {}
+    for accChunk in accChunks:
+        eLinkURL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi?dbfrom=nuccore&db=assembly&id={}" \
+                   "&retmax=1000&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(','.join(accChunk))
+        try:
+            ncbiRequest = urllib.request.urlopen(eLinkURL)
+            parseRequest = etree.parse(ncbiRequest)
+            ncbiIDsList = [idElem.find('Id').text for idElem in parseRequest.iter('Link')]
+            acc2ID.update(dict(zip(accChunk,ncbiIDsList)))
+
+            esummaryURL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=assembly&id={}" \
+                   "&retmax=1000&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(','.join(ncbiIDsList))
+            ncbiRequest = urllib.request.urlopen(esummaryURL)
+            parseRequest = etree.parse(ncbiRequest)
+            ID2assembly.update({idElem.attrib['uid']:idElem.find('AssemblyAccession').text
+                                for idElem in parseRequest.iter('DocumentSummary')})
+        except:
+            print("Error Connecting to NCBI Server")
+            raise
+
+    return({acc:ID2assembly[ID] for acc,ID in acc2ID.items()})
+
+def asmId2N50(asmIdList,batchSize = 200):
+    '''
+    :param asmIdList: list of assembly IDs
+    :param batchSize:
+    :return:
+    '''
+    asmId2ncbiID = dict()
+    failedSearch = []
+    for asmId in asmIdList:
+        esearchURL = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=assembly&term={}" \
+                     "&retmode=text&retmax=10&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(asmId)
+        try:
+            ncbiRequest = urllib.request.urlopen(esearchURL)
+            parseRequest = etree.parse(ncbiRequest)
+            ncbiID = [idElem.text for idElem in parseRequest.iter('Id')][0]
+            asmId2ncbiID[asmId] = ncbiID
+        except:
+            failedSearch.append(asmId)
+            print("Error Connecting to NCBI Server for acc {}".format(asmId))
+            pass
+    ncbiIdList = list(asmId2ncbiID.values())
+    ncbiIdChunks = [ncbiIdList[x:x+batchSize] for x in range(0,len(ncbiIdList),batchSize)]
+    failedExtract = []
+    Id2asmStats = {}
+
+    for idx,ncbiIdChunk in enumerate(ncbiIdChunks):
+        print('Working on {} of {}'.format(idx,len(ncbiIdChunks)))
+        esummaryURL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=assembly&id={}" \
+                      "&retmax=1000&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(','.join(ncbiIdChunk))
+        try:
+            ncbiRequest = urllib.request.urlopen(esummaryURL)
+            parseRequest = etree.parse(ncbiRequest)
+            Id2asmStats.update({idElem.attrib['uid']: (idElem.find('AssemblyAccession').text,idElem.find('ScaffoldN50').text)
+                            for idElem in parseRequest.iter('DocumentSummary')})
+        except:
+            failedExtract.append(ncbiIdChunk)
+            pass
+
+    statsDict = {}
+    for asmID,ncbiID in asmId2ncbiID.items():
+        searchAsmID,N50 = Id2asmStats[ncbiID]
+        statsDict[asmID] = (ncbiID,searchAsmID,N50)
+    return statsDict
+
 def ncbiQuery(keyword,organism,accession,minLength=0,maxLength=10000000000,retmax=1000,db='nuccore'):
     if not keyword and not organism and not accession:
         print("Nothing")
