@@ -72,52 +72,6 @@ def getAsmStats(ncbiGiList,batchSize=200):
 
     return outputDict
 
-        # for entry in soup.find_all('documentsummary'):
-        #     uid = entry['uid']
-        #
-        #     if entry.find('assemblyaccession'):
-        #         acc = entry.find('assemblyaccession').text.strip()
-        #     else:
-        #         acc = '##error##'
-        #
-        #     if entry.find('assemblystatus'):
-        #         asmStatus = entry.find('assemblystatus').text.strip()
-        #     else:
-        #         asmStatus = '##error##'
-        #
-        #     if entry.find('organism'):
-        #         orgn = entry.find('organism').text.strip()
-        #     else:
-        #         orgn = '##error##'
-        #
-        #     if entry.find('refseq_category'):
-        #         cat = entry.find('assemblyaccession').text.strip()
-        #     else:
-        #         cat = '##error##'
-        #
-        #     if entry.find('anomalouslist'):
-        #         anom = entry.find('assemblyaccession').text.strip()
-        #     else:
-        #         anom = '##error##'
-        #
-        #     if entry.find('assemblyaccession'):
-        #         acc = entry.find('assemblyaccession').text.strip()
-        #     else:
-        #         acc = '##error##'
-        #
-        #     if entry.find('assemblyaccession'):
-        #         acc = entry.find('assemblyaccession').text.strip()
-        #     else:
-        #         acc = '##error##'
-        #
-        #     if entry.find('assemblyaccession'):
-        #         acc = entry.find('assemblyaccession').text.strip()
-        #     else:
-        #         acc = '##error##'
-
-
-
-
 def acc2assembly(accList,batchSize=200):
     '''
     :param accList: list of assembly numbers corresponding to list of accession numbers
