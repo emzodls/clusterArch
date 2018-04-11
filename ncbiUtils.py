@@ -36,26 +36,90 @@ def acc2assembly(accList,batchSize=200):
 
     acc2ID = {}
     ID2assembly = {}
-    for accChunk in accChunks:
+    ctr = 0
+    failed = []
+    for acc in accList:
         eLinkURL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi?dbfrom=nuccore&db=assembly&id={}" \
-                   "&retmax=1000&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(','.join(accChunk))
+                   "&retmax=1000&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(acc)
+
         try:
             ncbiRequest = urllib.request.urlopen(eLinkURL)
             parseRequest = etree.parse(ncbiRequest)
-            ncbiIDsList = [idElem.find('Id').text for idElem in parseRequest.iter('Link')]
-            acc2ID.update(dict(zip(accChunk,ncbiIDsList)))
+            ncbiID = [idElem.find('Id').text for idElem in parseRequest.iter('Link')][0]
+            acc2ID[acc] = ncbiID
+        except Exception as e:
+            print(e)
+            print("Error Connecting to NCBI Server")
+            failed.append(acc)
+        ctr += 1
+        print("{}/{}".format(ctr, len(accList)))
 
-            esummaryURL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=assembly&id={}" \
-                   "&retmax=1000&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(','.join(ncbiIDsList))
+    ncbiIdList = list(acc2ID.values())
+    ncbiIDchunks = [ncbiIdList[x:x + batchSize] for x in range(0, len(ncbiIdList), batchSize)]
+    for ncbiChunk in ncbiIDchunks:
+        esummaryURL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=assembly&id={}" \
+                   "&retmax=1000&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(','.join(ncbiChunk))
+        ncbiRequest = urllib.request.urlopen(esummaryURL)
+        parseRequest = etree.parse(ncbiRequest)
+        ID2assembly.update({idElem.attrib['uid']:idElem.find('AssemblyAccession').text
+                                for idElem in parseRequest.iter('DocumentSummary')})
+    return({acc:ID2assembly[ID] for acc,ID in acc2ID.items()},failed)
+
+def asmAcc2Summary(asmIdList,batchSize=200):
+    '''
+    :param asmIdList: List of Assembly accession IDs
+    will query the NCBI with a list of assembly accessions, attempt to link accession to gene ID and return a dictionary
+    with the accession IDs found, their corresponding NBCI IDs, Linked Acc ID, and species name
+    :return: {query ACC ID: (ncbi ID, acc ID found, species name)}
+    '''
+    asmId2ncbiID = dict()
+    failedSearch = []
+    ctr = 0
+    for asmId in asmIdList:
+        esearchURL = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=assembly&term={}" \
+                     "&retmode=text&retmax=10&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(asmId)
+        try:
+            ncbiRequest = urllib.request.urlopen(esearchURL)
+            parseRequest = etree.parse(ncbiRequest)
+            ncbiID = [idElem.text for idElem in parseRequest.iter('Id')][0]
+            asmId2ncbiID[asmId] = ncbiID
+        except Exception as e:
+            failedSearch.append(asmId)
+            print(e)
+            print("Error Connecting to NCBI Server for acc {}".format(asmId))
+            pass
+        ctr += 1
+        print("{}/{}".format(ctr, len(asmIdList)))
+
+    ncbiIdList = list(asmId2ncbiID.values())
+    ncbiIdChunks = [ncbiIdList[x:x+batchSize] for x in range(0,len(ncbiIdList),batchSize)]
+    failedExtract = []
+    Id2asmStats = {}
+
+    for idx,ncbiIdChunk in enumerate(ncbiIdChunks):
+        print('Working on {} of {}'.format(idx,len(ncbiIdChunks)))
+        esummaryURL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=assembly&id={}" \
+                      "&retmax=1000&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(','.join(ncbiIdChunk))
+        try:
             ncbiRequest = urllib.request.urlopen(esummaryURL)
             parseRequest = etree.parse(ncbiRequest)
-            ID2assembly.update({idElem.attrib['uid']:idElem.find('AssemblyAccession').text
-                                for idElem in parseRequest.iter('DocumentSummary')})
+            Id2asmStats.update({idElem.attrib['uid']: (idElem.find('AssemblyAccession').text,
+                                                       idElem.find('SpeciesName').text,
+                                                       idElem.find('AssemblyStatus').text,
+                                                       idElem.find('ScaffoldN50').text,
+                                                       idElem.find('ContigN50').text)
+                            for idElem in parseRequest.iter('DocumentSummary')})
         except:
-            print("Error Connecting to NCBI Server")
-            raise
+            failedExtract.append(ncbiIdChunk)
+            pass
 
-    return({acc:ID2assembly[ID] for acc,ID in acc2ID.items()})
+    statsDict = {}
+    for asmID,ncbiID in asmId2ncbiID.items():
+        searchAsmID,speciesName,AssemblyStatus,scafN50,contigN50 = Id2asmStats[ncbiID]
+        statsDict[asmID] = (ncbiID,searchAsmID,speciesName,AssemblyStatus,scafN50,contigN50)
+    return statsDict
+
+
 
 def asmId2N50(asmIdList,batchSize = 200):
     '''
@@ -65,6 +129,7 @@ def asmId2N50(asmIdList,batchSize = 200):
     '''
     asmId2ncbiID = dict()
     failedSearch = []
+    ctr = 0
     for asmId in asmIdList:
         esearchURL = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=assembly&term={}" \
                      "&retmode=text&retmax=10&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(asmId)
@@ -73,10 +138,14 @@ def asmId2N50(asmIdList,batchSize = 200):
             parseRequest = etree.parse(ncbiRequest)
             ncbiID = [idElem.text for idElem in parseRequest.iter('Id')][0]
             asmId2ncbiID[asmId] = ncbiID
+
         except:
             failedSearch.append(asmId)
             print("Error Connecting to NCBI Server for acc {}".format(asmId))
             pass
+        ctr += 1
+        print("{}/{}".format(ctr, len(asmIdList)))
+
     ncbiIdList = list(asmId2ncbiID.values())
     ncbiIdChunks = [ncbiIdList[x:x+batchSize] for x in range(0,len(ncbiIdList),batchSize)]
     failedExtract = []
