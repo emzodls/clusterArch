@@ -26,6 +26,97 @@ import os,io
 from ftplib import FTP
 from Bio import SeqIO
 from math import floor,ceil
+from bs4 import BeautifulSoup
+
+def getAsmStats(ncbiGiList,batchSize=200):
+    '''
+    :param ncbiGiList: list of ncbi IDs corresponding to assemblies
+    :param batchSize: size of batches to do
+    :return: dictionary linking the ncbi ID to accession, status, organism, refseq_category,anomalies, contig n50/l50,
+    scaffold l50/n50, total length and ungapped length
+    '''
+    ncbiIDchunks = [ncbiGiList[x:x + batchSize] for x in range(0, len(ncbiGiList), batchSize)]
+
+    outputDict = dict()
+
+    for idx,ncbiChunk in enumerate(ncbiIDchunks):
+        print('Working on {} of {}'.format(idx, len(ncbiIDchunks)))
+        esummaryURL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=assembly&id={}" \
+                   "&retmax=1000&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(','.join(ncbiChunk))
+        ncbiRequest = urllib.request.urlopen(esummaryURL)
+        soup = BeautifulSoup(ncbiRequest, 'lxml')
+
+        uids = [x['uid'] for x in soup.find_all("documentsummary")]
+        accs = [x.text.strip() for x in soup.find_all("assemblyaccession")]
+        asmStatusS = [x.text.strip() for x in soup.find_all("assemblystatus")]
+        orgns  = [x.text.strip() for x in soup.find_all("organism")]
+        rsCats = [x.text.strip() for x in soup.find_all("refseq_category")]
+        anomalies = [x.text.strip() for x in soup.find_all("anomalouslist")]
+        contig_n50s = [int(x.text.strip()) for x in soup.find_all('stat',category='contig_n50',sequence_tag="all")]
+        contig_l50s = [int(x.text.strip()) for x in soup.find_all('stat',category='contig_l50',sequence_tag="all")]
+        scaf_n50s = [int(x.text.strip()) for x in soup.find_all('stat',category='scaffold_n50',sequence_tag="all")]
+        scaf_l50s = [int(x.text.strip()) for x in soup.find_all('stat',category='scaffold_l50',sequence_tag="all")]
+        lengths =  [int(x.text.strip()) for x in soup.find_all('stat',category='total_length',sequence_tag="all")]
+        ungapped_lengths = [int(x.text.strip()) for x in soup.find_all('stat',category='ungapped_length',sequence_tag="all")]
+
+        summaryDict = {uid:{'acc':acc,'asmStatus':asmStatus,'orgn':orgn,'rsCat':rsCat,'anomaly':anomaly,
+                            'contig_n50':contig_n50,'contig_l50':contig_l50,'scaf_n50':scaf_n50,'scaf_l50':scaf_l50,
+                            'length':length,'ungapped':ungapped_length}
+                       for uid,acc,asmStatus,orgn,rsCat,anomaly,contig_n50,contig_l50,scaf_n50,scaf_l50,
+                           length,ungapped_length in zip(uids,accs,asmStatusS,orgns,rsCats,anomalies,contig_n50s,
+                                                         contig_l50s,scaf_n50s,scaf_l50s,lengths,ungapped_lengths)
+                       }
+
+        assert len(summaryDict) == len(ncbiChunk)
+        outputDict.update(summaryDict)
+
+    return outputDict
+
+        # for entry in soup.find_all('documentsummary'):
+        #     uid = entry['uid']
+        #
+        #     if entry.find('assemblyaccession'):
+        #         acc = entry.find('assemblyaccession').text.strip()
+        #     else:
+        #         acc = '##error##'
+        #
+        #     if entry.find('assemblystatus'):
+        #         asmStatus = entry.find('assemblystatus').text.strip()
+        #     else:
+        #         asmStatus = '##error##'
+        #
+        #     if entry.find('organism'):
+        #         orgn = entry.find('organism').text.strip()
+        #     else:
+        #         orgn = '##error##'
+        #
+        #     if entry.find('refseq_category'):
+        #         cat = entry.find('assemblyaccession').text.strip()
+        #     else:
+        #         cat = '##error##'
+        #
+        #     if entry.find('anomalouslist'):
+        #         anom = entry.find('assemblyaccession').text.strip()
+        #     else:
+        #         anom = '##error##'
+        #
+        #     if entry.find('assemblyaccession'):
+        #         acc = entry.find('assemblyaccession').text.strip()
+        #     else:
+        #         acc = '##error##'
+        #
+        #     if entry.find('assemblyaccession'):
+        #         acc = entry.find('assemblyaccession').text.strip()
+        #     else:
+        #         acc = '##error##'
+        #
+        #     if entry.find('assemblyaccession'):
+        #         acc = entry.find('assemblyaccession').text.strip()
+        #     else:
+        #         acc = '##error##'
+
+
+
 
 def acc2assembly(accList,batchSize=200):
     '''
