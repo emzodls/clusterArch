@@ -28,6 +28,37 @@ from Bio import SeqIO
 from math import floor,ceil
 from bs4 import BeautifulSoup
 
+def getRefSeqURLS(ncbiGiList,batchSize=200):
+    '''
+    :param ncbiGiList: list of ncbi IDs corresponding to assemblies
+    :param batchSize: size of batches to do
+    :return: dictionary linking the ncbi ID to accession, status, organism, refseq_category,anomalies, contig n50/l50,
+    scaffold l50/n50, total length and ungapped length
+    '''
+    ncbiIDchunks = [ncbiGiList[x:x + batchSize] for x in range(0, len(ncbiGiList), batchSize)]
+
+    outputDict = dict()
+
+    for idx,ncbiChunk in enumerate(ncbiIDchunks):
+        print('Working on {} of {}'.format(idx, len(ncbiIDchunks)))
+        esummaryURL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=assembly&id={}" \
+                   "&retmax=1000&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(','.join(ncbiChunk))
+        ncbiRequest = urllib.request.urlopen(esummaryURL)
+        soup = BeautifulSoup(ncbiRequest, 'lxml')
+
+        uids = [x['uid'] for x in soup.find_all("documentsummary")]
+        accs = [x.text.strip() for x in soup.find_all("assemblyaccession")]
+        ftpPaths = [x.text.strip() for x in soup.find_all("ftppath_refseq")]
+        print(len(uids),len(accs),len(ftpPaths))
+        summaryDict = {uid:{'acc':acc,'ftpPath':ftpPath}
+                       for uid,acc,ftpPath in zip(uids,accs,ftpPaths)
+                       }
+
+        assert len(summaryDict) == len(ncbiChunk)
+        outputDict.update(summaryDict)
+
+    return outputDict
+
 def getAsmStats(ncbiGiList,batchSize=200):
     '''
     :param ncbiGiList: list of ncbi IDs corresponding to assemblies
