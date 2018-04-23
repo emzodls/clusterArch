@@ -28,6 +28,103 @@ from Bio import SeqIO
 from math import floor,ceil
 from bs4 import BeautifulSoup
 
+def getNcbiIds(accList,batchSize=200):
+    '''
+
+    :param accList:list of accession IDs
+    :return: list of all found ncbi ids associated with accession ids
+    '''
+    # remove version numbers and make unique
+    accList = list(set(x.split('.')[0] for x in accList))
+    accListChunks = [accList[x:x + batchSize] for x in range(0, len(accList), batchSize)]
+    outputIDs = set()
+
+    for idx,accListChunk in enumerate(accListChunks):
+        print('Working on {} of {}'.format(idx+1, len(accListChunks)))
+        esearchURL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=assembly&term={}" \
+                   "&retmax=1000&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format('+OR+'.join(accListChunk))
+        ncbiRequest = urllib.request.urlopen(esearchURL)
+        soup = BeautifulSoup(ncbiRequest, 'lxml')
+        outputIDs.update(x.text.strip() for x in soup.find_all("id"))
+
+    return outputIDs
+
+def getAsmTaxStats(ncbiGiList,batchSize=200):
+    '''
+    :param ncbiGiList: list of ncbi gis
+    :param batchSize: how many requests to ncbi at a time
+    :return:
+    '''
+    ncbiIDchunks = [ncbiGiList[x:x + batchSize] for x in range(0, len(ncbiGiList), batchSize)]
+    asmDict = dict()
+    taxIdDict = dict()
+
+    for idx,ncbiChunk in enumerate(ncbiIDchunks):
+        print('Working on {} of {}'.format(idx+1, len(ncbiIDchunks)))
+        esummaryURL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=assembly&id={}" \
+                   "&retmax=1000&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(','.join(ncbiChunk))
+        ncbiRequest = urllib.request.urlopen(esummaryURL)
+        soup = BeautifulSoup(ncbiRequest, 'lxml')
+
+        uids = [x['uid'] for x in soup.find_all("documentsummary")]
+        taxids = [x.text.strip() for x in soup.find_all("taxid")]
+        asmIDs,asmVersions = zip(*[x.text.strip().split('.') for x in soup.find_all("assemblyaccession")])
+        asmStatusS = [x.text.strip() for x in soup.find_all("assemblystatus")]
+        orgns  = [x.text.strip() for x in soup.find_all("organism")]
+        rsCats = [x.text.strip() for x in soup.find_all("refseq_category")]
+        anomalies = [x.text.strip() for x in soup.find_all("anomalouslist")]
+
+        for uid,asmID,asmVersion,asmStatus,orgn,rsCat,anomaly,taxid in \
+                zip(uids,asmIDs,asmVersions,asmStatusS,orgns,rsCats,anomalies,taxids):
+            assemblies = asmDict.setdefault(asmID,[])
+            assemblies.append({'asmID':asmID,'ncbiID':uid,'asmVersion':asmVersion,'asmStatus':asmStatus,
+                               'speciesName':orgn,'rsCat':rsCat,'anomaly':anomaly,'taxID':taxid})
+
+    # get only the latest assemblies
+    for assemblies in asmDict.values():
+        assemblies.sort(key=lambda x: -int(x['asmVersion']))
+
+    ## get the taxonomy information
+    asm2taxID = {k:v[0]['taxID'] for k,v in asmDict.items()}
+    taxID2asm = {v[0]['taxID']:k for k,v in asmDict.items()}
+    ## make taxonomy chunks
+
+    taxIDs = list(set(asm2taxID.values()))
+    taxIDchunks =  [taxIDs[x:x + batchSize] for x in range(0, len(taxIDs), batchSize)]
+
+    for idx, taxIDchunk in enumerate(taxIDchunks):
+        print('Working on taxIDchunk {} of {}'.format(idx+1, len(taxIDchunks)))
+        efetchURL = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=taxonomy&id={}' \
+                    "&retmax=1000&tool=clusterTools&email=e.de-los-santos@warwick.ac.uk".format(','.join(taxIDchunk))
+        ncbiRequest = urllib.request.urlopen(efetchURL)
+        soup = BeautifulSoup(ncbiRequest,'lxml')
+
+        taxonomies = []
+        entryIds = []
+        aliases = []
+        for entry in soup.taxaset.find_all('taxon', recursive=False):
+            taxDict = {}
+            taxDict['taxID'] = entry.taxid.text.strip()
+            taxDict['type_strain'] = any('type' in elem.text.strip() for elem in entry.find_all('classcde'))
+            for taxon in x.find_all('taxon'):
+                rank = taxon.rank.text.strip()
+                if rank in set(['genus', 'order', 'family', 'phylum', ]):
+                    taxDict['{}ID'.format(rank)] = int(taxon.taxid.text.strip())
+                    taxDict['{}Name'.format(rank)] = taxon.scientificname.text.strip()
+            taxonomies.append(taxDict)
+            entryIds.append(entry.taxid.text.strip())
+            aliases.append(entry.akataxids)
+        taxIdDict.update(dict(zip(entryIds,taxonomies)))
+        taxIdDict.update({altID.taxid.text.strip():type for altID,type in zip(aliases,taxonomies) if altID})
+
+    for k,v in asmDict.items():
+        try:
+            v[0]['type_strain'] = taxIdDict[asm2taxID[k]]['type_strain']
+        except Exception as e:
+            print(e)
+            print(v)
+
+    return {k:v[0] for k,v in asmDict.items()},taxIdDict
 def getRefSeqURLS(ncbiGiList,batchSize=200):
     '''
     :param ncbiGiList: list of ncbi IDs corresponding to assemblies

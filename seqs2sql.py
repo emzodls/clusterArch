@@ -1,10 +1,21 @@
-import re, sys, os, time,gzip, setlog, sqlalchemy as sql
+import re, sys, os, time,gzip, logging,sqlalchemy as sql
+from sqlalchemy import MetaData
 from Bio import Seq
+from Bio.Seq import Seq
+from initialize_db import Organism,CDS
 from Bio.Alphabet import generic_protein,generic_dna
 from sqlalchemy.orm import sessionmaker
 
-global log
-log = setlog.init(toconsole=True)
+from logging import handlers
+from logging.handlers import RotatingFileHandler
+
+log = logging.getLogger('')
+log.setLevel(logging.DEBUG)
+format = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+ch = logging.StreamHandler(sys.stdout)
+ch.setFormatter(format)
+log.addHandler(ch)
+
 
 def importAsmCDSfile(asmCDSpth,database,orgname=False):
     '''
@@ -14,25 +25,33 @@ def importAsmCDSfile(asmCDSpth,database,orgname=False):
     :param orgname: Override organism name
     :return:
     '''
-
+    objHandler = MetaData()
     engine = sql.create_engine('sqlite:///'+database)
     csr = engine.connect()
-    maxid = csr.execute('Select Max(seqid) from "Seqs"').fetchone()[0]
+    objHandler.reflect(bind=engine)
+
+    orgTable = objHandler.tables['organisms']
+    seqsTable = objHandler.tables['Seqs']
+
     timeStamp = int(time.time())
     recs = []
     source = os.path.split(asmCDSpth)[1]
+    sequence = ''
     if not orgname:
         # grabs the asmID base assuming you don't change the file name from the assembly download
         orgname = source.split('.')[0]
+
     for line in gzip.open(asmCDSpth):
-        if '>' in line:
-            startFlag = False
-            id = maxid + 1
-            if startFlag and sequence:
+        line = line.decode()
+        if line.startswith('>'):
+            if sequence:
+                #log.debug(sequence)
                 dnaSeq = Seq(sequence,generic_dna)
                 proteinSeq = dnaSeq.translate()
-                recs.append(id,orgname,internal_id,descr,source,gene_start,gene_end,direction_id,
-                            acc,timeStamp,dnaSeq.seq,proteinSeq.seq)
+                recDict = dict(orgname=orgname,gene=internal_id,description=descr,source=source,loc_start=gene_start,
+                               loc_end=gene_end,loc_strand=direction_id,acc=acc,lastscan=timeStamp,
+                               naseq = str(dnaSeq),aaseq = str(proteinSeq))
+                recs.append(recDict)
             sequence = ''
             lineParse = line.split()
             rawCDSid = lineParse[0].split('|')[1]
@@ -46,7 +65,7 @@ def importAsmCDSfile(asmCDSpth,database,orgname=False):
                     key, value = match[1:-1].split('=')
                     descriptors_dict[key] = value
                 except ValueError:
-                    print(match[1:-1])
+                    log.info("Wasn't able to parse descriptor, {}".format(match[1:-1]))
                     pass
             location = re.findall('\d+', descriptors_dict['location'])
             gene_start = int(location[0])
@@ -55,7 +74,7 @@ def importAsmCDSfile(asmCDSpth,database,orgname=False):
                 direction_id = '-'
             else:
                 direction_id = '+'
-            internal_id = "%s_CDS_%.5i" % (species_id, cds_ctr)
+            internal_id = "{}_CDS_{:05d}".format(acc, cds_ctr)
             if 'protein_id' in descriptors_dict.keys():
                 descr = descriptors_dict['protein_id']
             elif 'gene' in descriptors_dict.keys():
@@ -69,8 +88,14 @@ def importAsmCDSfile(asmCDSpth,database,orgname=False):
 
     log.info("Finished parsing file found {} new coding sequences".format(len(recs)))
     log.info("Inserting into Database".format(len(recs)))
-
+    if recs:
     ## First check if organism is already in Organisms if not add
-    if not csr.execute('Select name,id from organisms where organisms.name = "{}"'.format(orgname)):
-        maxOrgID = csr.execute('Select Max(seqid) from "organisms"').fetchone()[0]
-        csr.execute('Insert into "organisms" (name,id) VALUES ("{}",{})'.format(orgname,maxOrgID+1))
+        if not csr.execute(sql.select([orgTable]).where(orgTable.c.name == orgname)).fetchone():
+            csr.execute(orgTable.insert().values(name=orgname))
+        csr.execute(seqsTable.insert(),recs)
+        log.info('Added {:d} Records'.format(len(recs)))
+        csr.execute(
+         'DELETE FROM "Seqs" WHERE seqid NOT IN (SELECT min(t.seqid) FROM "Seqs" t GROUP BY orgname,gene,description,loc_start,loc_end,loc_strand)')
+        csr.close()
+
+    return

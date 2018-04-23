@@ -1,5 +1,5 @@
 #import os,sys
-from sqlalchemy import Column,ForeignKey,Integer,String,Text,Enum,Float
+from sqlalchemy import Column,ForeignKey,Integer,String,Text,Enum,Float,Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy import create_engine
@@ -8,17 +8,45 @@ Base = declarative_base()
 
 class Organism(Base):
     __tablename__ = 'organisms'
-    name = Column(Text,nullable=False)
     id = Column(Integer,primary_key=True,nullable=False)
+    asmID = Column(Text,nullable=False,unique=True)
+    speciesName = Column(Text)
+
+    taxID = Column(Integer)
+    ncbiID = Column(Integer)
+    rsCat = Column(Text)
+    anomaly= Column(Text)
+    asmStatus = Column(Text)
+    asmVersion = Column(Integer,nullable=False)
+    type_strain = relationship("Phylogeny",back_populates='type_strain')
+
     cds = relationship("CDS",back_populates='seqid')
     hmmHits = relationship("HMMhits",back_populates='hmmhit')
     rnaHits = relationship("RNAHits",back_populates='rnahit')
 
 
+class Phylogeny(Base):
+    __tablename__ = 'phylogeny'
+    asmID = Column(Text,ForeignKey('organisms.asmID'))
+    familyID = Column(Integer)
+    familyName = Column(Text)
+    genusName = Column(Text)
+    genusID = Column(Integer)
+    orderName = Column(Text)
+    orderID = Column(Integer)
+    phylumID = Column(Integer)
+    phylumName = Column(Text)
+    speciesName = Column(Text)
+    type_strain = Column(Boolean)
+    taxID = Column(Integer,primary_key=True)
+
+
+
 class CDS(Base):
     __tablename__= 'Seqs'
     seqid = Column(Integer,primary_key=True,nullable=False)
-    orgname = Column(Text,ForeignKey('organisms.name'))
+    # naming inconsistency to maintain autoMLST compatibility
+    orgname = Column(Text,ForeignKey('organisms.asmID'))
     gene = Column(Text)
     description = Column(Text)
     source = Column(Text)
@@ -34,7 +62,8 @@ class CDS(Base):
 
 class HmmHits(Base):
     __tablename__='HMMhits'
-    hmmhit = Column(Text,primary_key=True,nullable=False)
+    hmmhitID = Column(Integer,primary_key=True)
+    hmmhit = Column(Text,nullable=False)
     orgname = Column(Text,ForeignKey('organisms.name'))
     seqid = Column(Integer,ForeignKey('Seqs.seqid'))
     hmmstart = Column(Integer)
@@ -51,6 +80,7 @@ class HmmHits(Base):
     hmmcov = Column(Float)
     genecov = Column(Float)
     hmmLib = Column(Text)
+
     cds = relationship("Seqs",back_populates='orgname')
 
 class RnaHits(Base):
@@ -64,5 +94,7 @@ class RnaHits(Base):
     loc_strand = Column(Enum('+','-'))
     seq = Column(Text, nullable=False)
 
-engine = create_engine('sqlite:///mlst_sql.db')
-Base.metadata.create_all(engine)
+if __name__ == '__main__':
+    engine = create_engine('sqlite:///mlst_sql.db')
+    Base.metadata.drop_all(engine)
+    Base.metadata.create_all(engine)
