@@ -106,9 +106,9 @@ def getAsmTaxStats(ncbiGiList,batchSize=200):
             taxDict = {}
             taxDict['taxID'] = entry.taxid.text.strip()
             taxDict['type_strain'] = any('type' in elem.text.strip() for elem in entry.find_all('classcde'))
-            for taxon in x.find_all('taxon'):
+            for taxon in entry.find_all('taxon'):
                 rank = taxon.rank.text.strip()
-                if rank in set(['genus', 'order', 'family', 'phylum', ]):
+                if rank in set(['genus', 'order', 'family', 'phylum']):
                     taxDict['{}ID'.format(rank)] = int(taxon.taxid.text.strip())
                     taxDict['{}Name'.format(rank)] = taxon.scientificname.text.strip()
             taxonomies.append(taxDict)
