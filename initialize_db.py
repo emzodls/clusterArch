@@ -11,18 +11,13 @@ class Organism(Base):
     id = Column(Integer,primary_key=True,nullable=False)
     asmID = Column(Text,nullable=False,unique=True)
     speciesName = Column(Text)
-
     taxID = Column(Integer)
     ncbiID = Column(Integer)
     rsCat = Column(Text)
     anomaly= Column(Text)
     asmStatus = Column(Text)
     asmVersion = Column(Integer,nullable=False)
-    type_strain = relationship("Phylogeny",back_populates='type_strain')
-
-    cds = relationship("CDS",back_populates='seqid')
-    hmmHits = relationship("HMMhits",back_populates='hmmhit')
-    rnaHits = relationship("RNAHits",back_populates='rnahit')
+    type_strain = Column(Boolean)
 
 
 class Phylogeny(Base):
@@ -36,7 +31,6 @@ class Phylogeny(Base):
     orderID = Column(Integer)
     phylumID = Column(Integer)
     phylumName = Column(Text)
-    speciesName = Column(Text)
     type_strain = Column(Boolean)
     taxID = Column(Integer,primary_key=True)
 
@@ -58,43 +52,38 @@ class CDS(Base):
     naseq = Column(Text)
     aaseq = Column(Text,nullable=False)
 
-    hmmHits = relationship("HMMhits",back_populates='hmmhit')
 
 class HmmHits(Base):
     __tablename__='HMMhits'
     hmmhitID = Column(Integer,primary_key=True)
-    hmmhit = Column(Text,nullable=False)
-    orgname = Column(Text,ForeignKey('organisms.name'))
-    seqid = Column(Integer,ForeignKey('Seqs.seqid'))
-    hmmstart = Column(Integer)
-    hmmend = Column(Integer)
-    hmmlen = Column(Integer)
-    geneStart = Column(Integer)
-    geneEnd = Column(Integer)
-    genelen = Column(Integer)
-    evalue = Column(Float)
-    score = Column(Float)
-    bias = Column(Float)
-    iscore = Column(Float)
-    flags = Column(Integer)
+    hmmhit = Column(Text,nullable=False) # row[3]
+    orgname = Column(Text,ForeignKey('organisms.asmID')) #row[0].split(|)[0]
+    seqid = Column(Integer,ForeignKey('Seqs.seqid')) #row[0].split(|)[1]
+    hmmstart = Column(Integer) #row[15]
+    hmmend = Column(Integer) #row[16]
+    hmmlen = Column(Integer) #row[5]
+    geneStart = Column(Integer) #row[19] (env)
+    geneEnd = Column(Integer) #row[20] (env)
+    genelen = Column(Integer) #row[2]
+    evalue = Column(Float) #row[12] (i-Eval)
+    score = Column(Float) #row[13]
     hmmcov = Column(Float)
     genecov = Column(Float)
     hmmLib = Column(Text)
 
-    cds = relationship("Seqs",back_populates='orgname')
-
 class RnaHits(Base):
     __tablename__ = 'RNAHits'
     rnahit = Column(Text)
-    orgname = Column(Text, ForeignKey('organisms.name'))
+    orgname = Column(Text, ForeignKey('organisms.asmID'))
     seqid = Column(Integer,primary_key=True)
-    score = Column(Float)
+    eval = Column(Float)
     loc_start = Column(Integer)
     loc_end = Column(Integer)
     loc_strand = Column(Enum('+','-'))
+    partialFlag = Column(Integer)
     seq = Column(Text, nullable=False)
 
-if __name__ == '__main__':
-    engine = create_engine('sqlite:///mlst_sql.db')
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
+
+engine = create_engine('sqlite:///uplb_mlst.db')
+Base.metadata.drop_all(engine)
+Base.metadata.create_all(engine)
