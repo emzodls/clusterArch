@@ -24,15 +24,23 @@ from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 from Bio.Seq import Seq
 from Bio.Alphabet import generic_protein,generic_dna
+from collections import defaultdict
 from clusterTools import clusterAnalysis
 from random import random
-import subprocess,os,platform
-import gzip,re,math
+import subprocess,os,platform,logging
+import gzip,re,math,sys
 from pickle import dump,load
 import colorsys
 from fractions import Fraction
 from itertools import chain,count
 from clusterToolsParser import HmmParser
+
+log = logging.getLogger('')
+log.setLevel(logging.DEBUG)
+format = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+ch = logging.StreamHandler(sys.stdout)
+ch.setFormatter(format)
+log.addHandler(ch)
 
 '''
 color generation from:
@@ -926,6 +934,54 @@ def writeSeqRecs(handle,SeqRecs):
     except:
         return False
 
+def hmmAlignFastas(fastaList,hmmRef,outputFolder):
+    for fasta in fastaList:
+        hmmName = os.path.splitext(os.path.split(fasta)[1])[0]
+        log.debug('Aligning {}'.format(hmmName))
+        hmmFetchCmd = ['hmmfetch', hmmRef, hmmName]
+        hmmalignCmd = ['hmmalign', '-', fasta]
+
+        hmmFetchProc = subprocess.Popen(hmmFetchCmd, stdout=subprocess.PIPE)
+        hmmalignProc = subprocess.Popen(hmmalignCmd, stdin=hmmFetchProc.stdout, stdout=subprocess.PIPE)
+        log.debug('Reading {} alignment'.format(hmmName))
+        reference = ""
+        algnDict = defaultdict(str)
+        for line in hmmalignProc.stdout:
+            line = line.decode()
+            line = line.strip()
+            if line.startswith("#=GC RF"):
+                reference += line[7:].strip()
+            elif line == "":
+                continue
+            elif line[0] == "/" or line[0] == "#":
+                continue
+            else:
+                a = line.split(" ")
+                header = a[0]
+                algn = a[-1]
+                algnDict[header] += algn
+            # get start-end coordinates of every "x" island (original consensus)
+            # in the reference
+            state_reference = False
+            slicing_tuples = []
+
+        for pos in range(len(reference)):
+            if reference[pos] == "x" and not state_reference:
+                state_reference = True
+                start = pos
+            if reference[pos] == "." and state_reference:
+                state_reference = False
+                slicing_tuples.append((start, pos))
+        if state_reference:
+            slicing_tuples.append((start, len(reference)))
+        if len(algnDict) > 0:
+            with open(os.path.join(outputFolder,'{}.align.fasta'.format(hmmName)),'w') as outfile:
+                for header in algnDict:
+                    sequence = ""
+                    for a, b in slicing_tuples:
+                        sequence += algnDict[header][a:b]
+                    outfile.write('>{}\n{}\n'.format(header,sequence))
+    return
 ### stack exchange http://stackoverflow.com/questions/12523586/python-format-size-application-converting-b-to-kb-mb-gb-tb
 def humanbytes(B):
    'Return the given bytes as a human friendly KB, MB, GB, or TB string'

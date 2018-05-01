@@ -13,7 +13,7 @@ from logging.handlers import RotatingFileHandler
 
 log = logging.getLogger('')
 log.setLevel(logging.DEBUG)
-format = logging.Formatter("%(asctime)s - %(name)s - %(levelnamee)s - %(message)s")
+format = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 ch = logging.StreamHandler(sys.stdout)
 ch.setFormatter(format)
 log.addHandler(ch)
@@ -26,9 +26,8 @@ def addrRnaHits(db,barrnapFastas,pythonSort=False):
     '''
 
     records = []
-
     objHandler = MetaData()
-    engine = sql.create_engine('sqlite:///'+db)
+    engine = sql.create_engine('sqlite:///' + db)
     csr = engine.connect()
     objHandler.reflect(bind=engine)
     rRnaTable = objHandler.tables['RNAHits']
