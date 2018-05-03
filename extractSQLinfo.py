@@ -1,4 +1,5 @@
 import logging, os,sys,sqlalchemy as sql
+from itertools import chain
 from collections import defaultdict
 
 log = logging.getLogger('')
@@ -8,7 +9,7 @@ ch = logging.StreamHandler(sys.stdout)
 ch.setFormatter(format)
 log.addHandler(ch)
 
-def getUniqueCoreAccIds(queryDB,refDB,queryOrgs,refOrgs,cvg=0.5,eval=1e-4,RNA=False):
+def getUniqueCoreAccIds(queryDB,refDB,queryOrgs,refOrgs,cvg=0.5,eval=1e-4):
     ## first get the set of candidate genes from the query list
 
     engine = sql.create_engine('sqlite:///'+queryDB)
@@ -53,46 +54,88 @@ def cleanName(name):
     name = name.replace(' ','_')
     return(name)
 
-def writeFastas(idDict,queryDB,refDB,refOrgs,outputFolder='.'):
+def writeFastas(idDict,queryDB,refDB,reforgs,ogorgs=[],aaseq=False,RNA=False,outputFolder='.'):
     ## First Construct the ref org dict
     orgDict = dict()
     engine = sql.create_engine('sqlite:///' + refDB)
     csr = engine.connect()
     query = csr.execute('Select asmID,speciesName,type_strain FROM organisms '
-                        'WHERE asmID in ("{}")'.format('" , "'.join(refOrgs)))
+                        'WHERE asmID in ("{}")'.format('" , "'.join(chain(reforgs,ogorgs))))
     for asmID,name,ts in query:
         orgDict[asmID] = (cleanName(name),ts)
     csr.close()
-
+    queryOrgs = set()
+    refOrgs = dict()
     if not os.path.exists(outputFolder):
         os.mkdir(outputFolder)
     for hmmhit in idDict:
         log.info('Writing {} Seqs'.format(hmmhit))
         seqs = []
-        refOrgs = set()
         ## get the query sequences from the
         engine = sql.create_engine('sqlite:///' + queryDB)
         csr = engine.connect()
-        query = csr.execute('Select orgname,aaseq FROM Seqs WHERE seqid in ({})'.format(
+        query = csr.execute('Select orgname,naseq,aaseq FROM Seqs WHERE seqid in ({})'.format(
             ' , '.join(str(x) for x in idDict[hmmhit]['query'])))
-        for orgname,aaseq in query:
-            seqs.append(('QS--'+orgname,aaseq))
+        for orgname,naseq,aaseq in query:
+            seqs.append(('QS--'+orgname,naseq,aaseq))
+            queryOrgs.add('QS--'+orgname)
         csr.close()
 
         engine = sql.create_engine('sqlite:///' + refDB)
         csr = engine.connect()
-        query = csr.execute('Select orgname,aaseq FROM Seqs WHERE seqid in ({})'.format(
+        query = csr.execute('Select orgname,naseq,aaseq FROM Seqs WHERE seqid in ({})'.format(
             ' , '.join(str(x) for x in idDict[hmmhit]['ref'])))
-        for orgname,aaseq in query:
-            name,ts = orgDict.get(orgname,[orgname,False])
-            if ts:
-                refName = 'TS--{}:{}'.format(orgname,name)
+        for asmID,naseq,aaseq in query:
+            name,ts = orgDict.get(asmID,[asmID,False])
+            if asmID in ogorgs:
+                if ts:
+                    refName = 'OG-TS--{}-{}'.format(asmID,name)
+                else:
+                    refName = 'OG--{}-{}'.format(asmID, name)
+            elif ts:
+                refName = 'TS--{}-{}'.format(asmID,name)
             else:
-                refName = '{}:{}'.format(orgname, name)
-            seqs.append((refName,aaseq))
+                refName = '{}-{}'.format(asmID, name)
+            seqs.append((refName,naseq,aaseq))
+            refOrgs[asmID] = refName
         csr.close()
 
-        with open(os.path.join(outputFolder,'{}.fasta'.format(hmmhit)),'w') as outfile:
-            for name,seq in seqs:
-                outfile.write('>{}\n{}\n'.format(name,seq))
+        if aaseq:
+            with open(os.path.join(outputFolder,'{}.fna'.format(hmmhit)),'w') as ntfasta, \
+                open(os.path.join(outputFolder,'{}.faa'.format(hmmhit)),'w') as aafasta:
+                for name,naseq,aaseq in seqs:
+                    ntfasta.write('>{}\n{}\n'.format(name,naseq))
+                    aafasta.write('>{}\n{}\n'.format(name,aaseq))
+        else:
+            with open(os.path.join(outputFolder, '{}.fna'.format(hmmhit)), 'w') as ntfasta:
+                for name,naseq,aaseq in seqs:
+                    ntfasta.write('>{}\n{}\n'.format(name,naseq))
+    if RNA:
+        engine = sql.create_engine('sqlite:///' + queryDB)
+        csr = engine.connect()
+        query = csr.execute('Select orgname,seq FROM RNAHits '
+                            'WHERE rnahit="16S_rRNA" AND '
+                            'orgname in ("{}")'.format('" , "'.join(queryOrgs)))
+        queryRNAs = [x for x in query]
+        csr.close()
+        ## Only do main DB query if there is 16s information for all of the query sequences
+
+        engine = sql.create_engine('sqlite:///' + refDB)
+        csr = engine.connect()
+        query = csr.execute('Select orgname,seq FROM RNAHits '
+                                'WHERE rnahit="16S_rRNA" AND '
+                                'orgname in ("{}")'.format('" , "'.join(refOrgs.keys())))
+        refRNAs = [x for x in query]
+
+        if not len(refRNAs) == len(refOrgs):
+            log.warning('Did not find 16s information for all of the reference organisms')
+        if not len(queryRNAs) == len(queryOrgs):
+            log.warning('Did not find 16s information for all of the query organisms')
+        with open(os.path.join(outputFolder, '16s.fna'), 'w') as rnafasta:
+            for orgname, seq in queryRNAs:
+                rnafasta.write('>{}\n{}\n'.format(orgname, seq))
+            for orgname, seq in refRNAs:
+                rnafasta.write('>{}\n{}\n'.format(refOrgs[orgname], seq))
+    else:
+        log.info('Skipping 16s genes...')
     return
