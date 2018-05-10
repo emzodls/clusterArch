@@ -24,6 +24,8 @@ def getUniqueCoreAccIds(queryDB,refDB,queryOrgs,refOrgs,cvg=0.5,eval=1e-4):
     csr.close()
 
     candidateGenes = {k:v for k,v in queryCts.items() if all(len(v[x]) == 1 for x in queryOrgs)}
+
+    log.info('Found {} candidate mlst genes in query organism'.format(len(candidateGenes)))
     engine = sql.create_engine('sqlite:///'+refDB)
     csr = engine.connect()
 
@@ -54,7 +56,7 @@ def cleanName(name):
     name = name.replace(' ','_')
     return(name)
 
-def writeFastas(idDict,queryDB,refDB,reforgs,ogorgs=[],aaseq=False,RNA=False,outputFolder='.'):
+def writeFastas(idDict,queryDB,refDB,reforgs,ogorgs=[],addAA=False,RNA=False,outputFolder='.'):
     ## First Construct the ref org dict
     orgDict = dict()
     engine = sql.create_engine('sqlite:///' + refDB)
@@ -100,7 +102,7 @@ def writeFastas(idDict,queryDB,refDB,reforgs,ogorgs=[],aaseq=False,RNA=False,out
             refOrgs[asmID] = refName
         csr.close()
 
-        if aaseq:
+        if addAA:
             with open(os.path.join(outputFolder,'{}.fna'.format(hmmhit)),'w') as ntfasta, \
                 open(os.path.join(outputFolder,'{}.faa'.format(hmmhit)),'w') as aafasta:
                 for name,naseq,aaseq in seqs:
