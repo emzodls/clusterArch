@@ -863,6 +863,122 @@ def processClusterGenbank(clusterGbk,outputFile=None):
 
     return {protein_seq.id:protein_seq.seq for protein_seq in prot_seqs}
 
+def proccessAntismashFinalGbks(taskList,outputDir,commonName=False,guiSignal=None):
+    # make sure species list is unique
+    speciesList = set()
+    failedToProcess = []
+    for gbkFile in taskList:
+        try:
+            genbank_entries = SeqIO.parse(open(gbkFile), "genbank")
+            path,fileName = os.path.split(gbkFile)
+            species_base,ext = os.path.splitext(fileName)
+            if guiSignal:
+                guiSignal.emit(fileName)
+            CDS_prot_outfile_name = outputDir
+            cds_ctr = 0
+            entry_ctr = 1
+            # See if user wants a different name
+            for genbank_entry in genbank_entries:
+                clusterNumber = None
+                prot_seqs = []
+                species_id = genbank_entry.name
+                if species_id in speciesList:
+                    species_id = species_base + '.entry%.4i' % entry_ctr
+                # check for uniqueness, if there is already an entry on the list insert random number
+                ## Check if it is an antismash file
+                clusters = [cluster for cluster in genbank_entry.features if cluster.type == 'cluster']
+                ## if it is specifically only has 1 antismash cluster, tag it as such with the species ID and clustertype
+                if clusters:
+                    for cluster in clusters:
+                        try:
+                            clusterNumber = cluster.qualifiers['note'][0].split(':')[1].strip()
+                        except:
+                            clusterNumber = None
+                        if clusterNumber:
+                            cluster_id = '.cluster{}'.format(clusterNumber)
+                        if 'product' in cluster.qualifiers.keys():
+                            productID = cluster.qualifiers['product'][0].split()
+                            productID = ''.join(productID)
+                            # only get top 4
+                            productID = productID.split('-')
+                            endIdx = min(len(productID),4)
+                            productID = '-'.join(productID[:endIdx])
+                            cluster_id += '.{}'.format(productID).strip()
+                        species_id = species_id.strip()
+
+                        CDS_list = (feature for feature in genbank_entry.features if feature.type == 'CDS' and feature.location.start in cluster)
+                        for CDS in CDS_list:
+                            cds_ctr += 1
+                            direction = CDS.location.strand
+                            # Ensure that you don't get negative values, Biopython parser will not ignore slices that are greater
+                            # than the entry so you don't need to worry about the other direction
+                            internal_id = "%s_CDS_%.5i" % (species_id, cds_ctr)
+                            protein_id = internal_id
+
+                            gene_start = max(0, CDS.location.nofuzzy_start)
+                            gene_end = max(0, CDS.location.nofuzzy_end)
+
+                            # Try to find a common name for the promoter, otherwise just use the internal ID
+                            if commonName and 'gene' in CDS.qualifiers.keys():
+                                protein_id = CDS.qualifiers['gene'][0]
+                            elif 'protein_id' in CDS.qualifiers.keys():
+                                protein_id = CDS.qualifiers['protein_id'][0]
+                            elif 'locus_tag' in CDS.qualifiers.keys():
+                                protein_id = CDS.qualifiers['locus_tag'][0]
+                            if 'translation' in CDS.qualifiers.keys():
+                                prot_seq = Seq(CDS.qualifiers['translation'][0])
+                                if direction == 1:
+                                    direction_id = '+'
+                                else:
+                                    direction_id = '-'
+                            else:
+                                genbank_seq = CDS.location.extract(genbank_entry)
+                                nt_seq = genbank_seq.seq
+                                if direction == 1:
+                                    direction_id = '+'
+                                    # for protein sequence if it is at the start of the entry assume that end of sequence is in frame
+                                    # if it is at the end of the genbank entry assume that the start of the sequence is in frame
+                                    if gene_start == 0:
+                                        if len(nt_seq) % 3 == 0:
+                                            prot_seq = nt_seq.translate()
+                                        elif len(nt_seq) % 3 == 1:
+                                            prot_seq = nt_seq[1:].translate()
+                                        else:
+                                            prot_seq = nt_seq[2:].translate()
+                                    else:
+                                        prot_seq = nt_seq.translate()
+                                if direction == -1:
+                                    direction_id = '-'
+
+                                    nt_seq = genbank_seq.seq
+
+                                    if gene_start == 0:
+                                        prot_seq = nt_seq.translate()
+                                    else:
+                                        if len(nt_seq) % 3 == 0:
+                                            prot_seq = nt_seq.translate()
+                                        elif len(nt_seq) % 3 == 1:
+                                            prot_seq = nt_seq[:-1].translate()
+                                        else:
+                                            prot_seq = nt_seq[:-2].reverse_complement().translate()
+
+                            # Write protein file
+                            if len(prot_seq) > 0:
+                                prot_entry = SeqRecord(prot_seq, id='%s%s|%i-%i|%s|%s|%s' % (species_id,cluster_id, gene_start + 1,
+                                                                                           gene_end, direction_id,
+                                                                                           internal_id, protein_id))
+                                prot_seqs.append(prot_entry)
+                        with open(CDS_prot_outfile_name, 'a') as outfile_handle:
+                            SeqIO.write(prot_seqs, outfile_handle, 'fasta')
+                entry_ctr += 1
+        except Exception as e:
+            if guiSignal:
+                guiSignal.emit('Error Reading {}'.format(fileName))
+            failedToProcess.append(fileName)
+            print(gbkFile,e)
+            pass
+    return failedToProcess
+
 def runPfamHmmScan(fastaPath,hmmPath):
     hmmFile = os.path.join(hmmPath,'Pfam-A.hmm')
     if os.path.isfile(hmmFile):

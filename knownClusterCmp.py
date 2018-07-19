@@ -188,7 +188,7 @@ def compareMibigClusters(clusterName,clusterObj,mibigIDs,mibigDomCts,mibigPairs,
 
         ## calculate Jaccard Score
 
-        jaccardScore = len(sharedDomains) / (len(clusterDoms) + len(mibigClusterDoms))
+        jaccardScore = len(sharedDomains) / len(clusterDoms | mibigClusterDoms)
 
         ## calculate domain similarity score
         for unsharedDom in unsharedDomains:
@@ -307,7 +307,7 @@ def calculate_distance(clusterA,clusterB, anot_id,anchor_domains=set(),unknown_d
 
     intersect = clusterAdoms & clusterBdoms
 
-    jaccardScore = len(intersect)/(len(clusterAdoms) + len(clusterBdoms))
+    jaccardScore = len(intersect)/len(clusterAdoms | clusterBdoms)
 
     domain_difference_anchor, S_anchor = 0, 0
     domain_difference, S = 0, 0
