@@ -29,7 +29,8 @@ from PyQt5.QtWidgets import (QApplication, QFileDialog, QMainWindow,
         QMessageBox,QTableWidgetItem,QWidget,QListWidgetItem)
 from utils import parseSeqFile,parseHMMfile,generateInputFasta,generateHMMdb,MakeBlastDB,runBLAST,runBLASTself,\
     runHmmsearch,proccessGbks,humanbytes,processGbkDivFile,\
-    ncbiGenomeFastaParser,fastaDictToSeqRecs,writeSeqRecs,runHmmCheck,runHmmBuild,generateCtDBIdxFile,processSearchListHmmParser
+    ncbiGenomeFastaParser,fastaDictToSeqRecs,writeSeqRecs,runHmmCheck,runHmmBuild,generateCtDBIdxFile,\
+    processSearchListHmmParser,processSearchListHmmParser_sets
 from collections import Counter
 from glob import iglob,glob
 from itertools import chain
@@ -458,7 +459,7 @@ class runProcessSearchListOptionalHits(QObject):
     @pyqtSlot(dict)
     @pyqtSlot(tuple)
     def run(self):
-        output = processSearchListHmmParser(self.requiredBlastList, self.requiredHmmList,
+        output = processSearchListHmmParser_sets(self.requiredBlastList, self.requiredHmmList,
                                                          self.selfBlastFile,self.blastOutFile, self.blastEval,
                                                          self.hmmOutFile,self.hmmScore,self.hmmDomLen,self.windowSize,
                                                          self.totalHitsRequired,self.additionalBlastList,self.additionalHmmList,
@@ -3137,11 +3138,21 @@ class mainApp(QMainWindow, mainGuiNCBI.Ui_clusterArch):
 
                 dbPath, dbName = os.path.split(self.SavedResultSummary['db'])
                 baseName,ext = os.path.splitext(dbName)
-                print('Checking',os.path.join(dbPath,baseName +'.ctDB.idx'),os.path.join(self.outputDir,baseName + '.ctDB.idx'))
+                if self.verbose:
+                    print('Checking', os.path.join(dbPath, baseName + '.ctDB.idx'),
+                          os.path.isfile(os.path.join(dbPath, baseName + '.ctDB.idx')))
+                    print('Checking', os.path.join(self.outputDir,baseName + '.ctDB.idx'),
+                          os.path.isfile(os.path.join(self.outputDir, baseName +  '.ctDB.idx')))
                 if os.path.isfile(os.path.join(dbPath,baseName + '.ctDB.idx')):
+                    if self.verbose: print('Found in dbPath')
                     dbIdxFile = os.path.join(dbPath,baseName + '.ctDB.idx')
-                elif os.path.isfile(os.path.join(self.outputDir,baseName,'.ctDB.idx')):
-                    dbIdxFile = os.path.join(self.outputDir,baseName,'.ctDB.idx')
+                    if self.verbose:
+                        print('DBfile is ', dbIdxFile)
+                elif os.path.isfile(os.path.join(self.outputDir,baseName + '.ctDB.idx')):
+                    if self.verbose: print('Found in output path')
+                    dbIdxFile = os.path.join(self.outputDir,baseName + '.ctDB.idx')
+                    if self.verbose:
+                        print('DBfile is ', dbIdxFile)
                 else:
                     dbIdxFile = None
                 if not self.runnerThread:

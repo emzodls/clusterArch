@@ -106,6 +106,18 @@ def addCoreHmmHits(db,hmmHits):
         'GROUP BY hmmhit,seqid,hmmstart,hmmend)')
     csr.close()
 
+def addCoreHmmHits_old(db,hmmHits):
+    objHandler = MetaData()
+    engine = sql.create_engine('sqlite:///'+db)
+    csr = engine.connect()
+    objHandler.reflect(bind=engine)
+    hmmTable = objHandler.tables['HMMHits']
+    csr.execute(hmmTable.insert(), hmmHits)
+    ### remove duplicates pick latest entry
+    csr.execute(
+        'DELETE FROM "HMMhits" WHERE hmmhitID NOT IN (SELECT max(t.hmmhitID) FROM "HMMhits" t '
+        'GROUP BY hmmhit,seqid,hmmstart,hmmend)')
+    csr.close()
 
 def calculate_window(coordinates):
     return coordinates[-1]-coordinates[0]+1.

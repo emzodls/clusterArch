@@ -303,6 +303,114 @@ def processSelfBlastScore(blastOutFile):
                 pass
     return scoreDict
 
+def processSearchListHmmParser_sets(requiredBlastList,requiredHmmList,selfBlastFile,blastOutFile,blastEval,
+                                  hmmOutFile,hmmScore, hmmDomLen,
+                                  windowSize,totalHitsRequired,additionalBlastList=[],additionalHmmList=[],
+                                 jsonOutput=False,geneIdxFile=None,logfile = None):
+    prots = dict()
+    if requiredBlastList or additionalBlastList:
+        prots = clusterAnalysis.parseBLAST(blastOutFile,prots,swapQuery=True,evalCutoff=blastEval)
+    if requiredHmmList or additionalHmmList:
+        prots = clusterAnalysis.parse_hmmsearch_domtbl_anot(hmmOutFile,hmmDomLen,'hmm',prots,cutoff_score=hmmScore)
+    requiredBlastHitDict = dict()
+    requiredHmmHitDict = dict()
+    additionalBlastHitDict = dict()
+    additionalHmmHitDict = dict()
+    if requiredBlastList or additionalBlastList:
+        selfScoreDict = processSelfBlastScore(selfBlastFile)
+    else:
+        selfScoreDict = dict()
+    if requiredBlastList:
+        requiredBlastHitDict = {hitName:set(protein for protein in prots.values() if hitName in protein.hit_dict['blast'].hits)
+                  for hitName in requiredBlastList}
+    if requiredHmmList:
+        for hmmRule in requiredHmmList:
+            requiredHmmHitDict[hmmRule] = set()
+            ruleParser = HmmParser(hmmRule)
+            for protein in prots.values():
+                if ruleParser.rule.condition.is_satisfied(protein):
+                    requiredHmmHitDict[hmmRule].add(protein)
+    if additionalBlastList:
+        additionalBlastHitDict = {hitName:set(protein for protein in prots.values() if hitName in protein.hit_dict['blast'].hits)
+                  for hitName in additionalBlastList}
+    if additionalHmmList:
+        for hmmRule in additionalHmmList:
+            additionalHmmHitDict[hmmRule] = set()
+            ruleParser = HmmParser(hmmRule)
+            for protein in prots.values():
+                if ruleParser.rule.condition.is_satisfied(protein):
+                    additionalHmmHitDict[hmmRule].add(protein)
+
+    requiredHitDict = {**requiredBlastHitDict,**requiredHmmHitDict}
+    additionalHitDict = {**additionalBlastHitDict, **additionalHmmHitDict}
+    hitDict = {**requiredHitDict,**additionalHitDict}
+
+    #need this for repeat domains
+
+    requiredHitList = requiredBlastList+requiredHmmList
+    additionalHitList = additionalBlastList+additionalHmmList
+    numReqHits = len(requiredHitList)
+
+    hitProteins = set()
+    hitProteins.update(*requiredHitDict.values())
+    hitProteins.update(*additionalHitDict.values())
+
+    putativeClusters = clusterAnalysis.clusterProteins(hitProteins,windowSize)
+    assert totalHitsRequired >= numReqHits
+
+    numExtraHitsNeeded = totalHitsRequired - numReqHits
+    filteredClusters = dict()
+    filteredCTvisOutput = dict()
+    print(len(putativeClusters))
+    for species,clusters in putativeClusters.items():
+        for cluster in clusters:
+            if logfile:
+                with open(logfile,'a') as outfile:
+                    outfile.write('{},{}\n'.format(species,cluster))
+            clusterProts = set(protein for protein in cluster)
+            requiredHitProts = set()
+            for hitID in requiredHitList:
+                requiredHitProts.update(clusterProts & requiredHitDict[hitID])
+            additionalHitProts = set()
+            for hitID in additionalHitList:
+                additionalHitProts.update(clusterProts & additionalHitDict[hitID])
+            if logfile:
+                with open(logfile, 'a') as outfile:
+                    outfile.write('Num Required Hits: {}'.format(len(requiredHitProts) >= numReqHits))
+                    outfile.write('Additional Hits: {}'.format(len(additionalHitProts) >= numExtraHitsNeeded))
+                    outfile.write('All Required Hits: {}'.format(all([any(prot in hitDict[hitID] for prot in cluster) for hitID in requiredHitList])))
+            if len(requiredHitProts) >= numReqHits and \
+                len(additionalHitProts) >= numExtraHitsNeeded and \
+                all([any(prot in hitDict[hitID] for prot in cluster) for hitID in requiredHitList]):
+                speciesClusters = filteredClusters.get(species,[])
+                speciesClusters.append(cluster)
+                filteredClusters[species] = speciesClusters
+                filteredCTvisOutput[(species, cluster.location[0], cluster.location[1])] = dict()
+                for hitQuery, hitSet in hitDict.items():
+                    ### if BLAST hit include similarity score
+                    if hitQuery in requiredBlastList or hitQuery in additionalBlastList:
+                        filteredCTvisOutput[(species, cluster.location[0], cluster.location[1])][hitQuery] = \
+                            [(protein.name, protein.hit_dict['blast'].get(hitQuery) / selfScoreDict[hitQuery]) for
+                             protein in (hitSet & clusterProts)]
+                    else:
+                        filteredCTvisOutput[(species, cluster.location[0], cluster.location[1])][hitQuery] = \
+                            [(protein.name, None) for
+                             protein in (hitSet & clusterProts)]
+
+    if jsonOutput and filteredClusters:
+        blastLists = (set(requiredBlastList), set(additionalBlastList))
+        hmmLists = (set(requiredHmmList), set(additionalHmmList))
+        hmmQuerys = set()
+        for hmmRule in requiredHmmList + additionalHmmList:
+            rule = HmmParser(hmmRule)
+            print(rule, rule.identifiers)
+            hmmQuerys.update(rule.identifiers)
+        jsonFile = createJsonFile(filteredClusters, blastLists, hmmLists, hmmQuerys, hitDict, selfScoreDict,
+                                          geneIdxFile=geneIdxFile)
+    else:
+        jsonFile = ''
+
+    return filteredCTvisOutput, jsonFile
 
 def processSearchListHmmParser(requiredBlastList,requiredHmmList,selfBlastFile,blastOutFile,blastEval,
                                   hmmOutFile,hmmScore, hmmDomLen,
