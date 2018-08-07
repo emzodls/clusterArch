@@ -308,10 +308,17 @@ def processSearchListHmmParser_sets(requiredBlastList,requiredHmmList,selfBlastF
                                   windowSize,totalHitsRequired,additionalBlastList=[],additionalHmmList=[],
                                  jsonOutput=False,geneIdxFile=None,logfile = None):
     prots = dict()
+    hmmHits = set()
+
     if requiredBlastList or additionalBlastList:
         prots = clusterAnalysis.parseBLAST(blastOutFile,prots,swapQuery=True,evalCutoff=blastEval)
     if requiredHmmList or additionalHmmList:
-        prots = clusterAnalysis.parse_hmmsearch_domtbl_anot(hmmOutFile,hmmDomLen,'hmm',prots,cutoff_score=hmmScore)
+        requiredHmmRules = [HmmParser(hmmRule) for hmmRule in requiredHmmList]
+        additionalHmmRules = [HmmParser(hmmRule) for hmmRule in additionalHmmList]
+        for ruleParser in requiredHmmRules+additionalHmmRules:
+            hmmHits.update(ruleParser.identifiers)
+        prots = clusterAnalysis.parse_hmmsearch_domtbl_anot(hmmOutFile,hmmDomLen,'hmm',prots,cutoff_score=hmmScore,
+                                                            hmmFilter = hmmHits)
     requiredBlastHitDict = dict()
     requiredHmmHitDict = dict()
     additionalBlastHitDict = dict()
@@ -326,9 +333,8 @@ def processSearchListHmmParser_sets(requiredBlastList,requiredHmmList,selfBlastF
     if requiredHmmList:
         for hmmRule in requiredHmmList:
             requiredHmmHitDict[hmmRule] = set()
-            ruleParser = HmmParser(hmmRule)
             for protein in prots.values():
-                if ruleParser.rule.condition.is_satisfied(protein):
+                if HmmParser(hmmRule).rule.condition.is_satisfied(protein):
                     requiredHmmHitDict[hmmRule].add(protein)
     if additionalBlastList:
         additionalBlastHitDict = {hitName:set(protein for protein in prots.values() if hitName in protein.hit_dict['blast'].hits)
@@ -336,9 +342,8 @@ def processSearchListHmmParser_sets(requiredBlastList,requiredHmmList,selfBlastF
     if additionalHmmList:
         for hmmRule in additionalHmmList:
             additionalHmmHitDict[hmmRule] = set()
-            ruleParser = HmmParser(hmmRule)
             for protein in prots.values():
-                if ruleParser.rule.condition.is_satisfied(protein):
+                if HmmParser(hmmRule).rule.condition.is_satisfied(protein):
                     additionalHmmHitDict[hmmRule].add(protein)
 
     requiredHitDict = {**requiredBlastHitDict,**requiredHmmHitDict}
@@ -400,12 +405,12 @@ def processSearchListHmmParser_sets(requiredBlastList,requiredHmmList,selfBlastF
     if jsonOutput and filteredClusters:
         blastLists = (set(requiredBlastList), set(additionalBlastList))
         hmmLists = (set(requiredHmmList), set(additionalHmmList))
-        hmmQuerys = set()
-        for hmmRule in requiredHmmList + additionalHmmList:
-            rule = HmmParser(hmmRule)
-            print(rule, rule.identifiers)
-            hmmQuerys.update(rule.identifiers)
-        jsonFile = createJsonFile(filteredClusters, blastLists, hmmLists, hmmQuerys, hitDict, selfScoreDict,
+        # hmmQuerys = set()
+        # for hmmRule in requiredHmmList + additionalHmmList:
+        #     rule = HmmParser(hmmRule)
+        #     print(rule, rule.identifiers)
+        #     hmmQuerys.update(rule.identifiers)
+        jsonFile = createJsonFile(filteredClusters, blastLists, hmmLists, hmmHits, hitDict, selfScoreDict,
                                           geneIdxFile=geneIdxFile)
     else:
         jsonFile = ''
